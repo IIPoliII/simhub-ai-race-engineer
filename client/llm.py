@@ -47,7 +47,8 @@ class Engineer:
         telemetry = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
         messages = [{"role": "system", "content": SYSTEM[self.language]}]
         messages += list(self.history)
-        telemetry = telemetry.replace("</telemetrie>", "")  # empêche de fermer la balise depuis un pseudo
+        # Échappement JSON de < et > : un pseudo ne peut ni fermer ni ouvrir de balise
+        telemetry = telemetry.replace("<", "\\u003c").replace(">", "\\u003e")
         messages.append({"role": "user", "content": f"<telemetrie>{telemetry}</telemetrie>\n\nPILOTE : {question}"})
 
         resp = self.client.chat.completions.create(

@@ -613,7 +613,11 @@ namespace AIRaceEngineer
                 ("base", "Rapide, environ 0,4 s"),
             }, S.SttModel, v => { S.SttModel = v; Changed(); })));
             body.Children.Add(Divider());
-            body.Children.Add(ToggleRow("Effet radio", "Filtre radio et léger grésillement", S.RadioEffect, v => { S.RadioEffect = v; Changed(); }));
+            FrameworkElement track = null;
+            body.Children.Add(ToggleRow("Effet radio", "Filtre radio et léger grésillement", S.RadioEffect, v => { S.RadioEffect = v; track.IsEnabled = v; Changed(); }));
+            track = ToggleRow("Bruits de piste", "Des F1 passent parfois derrière l'ingé, jamais deux fois pareil. Sa voix reste devant", S.TrackNoise, v => { S.TrackNoise = v; Changed(); });
+            track.IsEnabled = S.RadioEffect;
+            body.Children.Add(track);
             return card;
         }
 

@@ -53,6 +53,10 @@ le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire :
   - **ElevenLabs** : la plus réaliste, payante.
 
   Le bouton **Écouter** fait entendre la voix choisie. Effet radio et reconnaissance rapide ou précise en option.
+- **Bruits de piste** : avec l'effet radio, des F1 passent parfois derrière l'ingé, comme au muret des stands.
+  Rien n'est enregistré : chaque voiture est synthétisée à chaque message (régime, passages de rapport, distance,
+  effet Doppler), donc jamais deux fois le même son, et parfois aucun. Le fond baisse quand l'ingé parle pour que
+  sa voix reste parfaitement lisible.
 - **Intelligence artificielle** : Infomaniak, Cloudflare, OpenAI, Claude, ou n'importe quelle API compatible
   OpenAI (Ollama...). Une fois la clé collée, la liste « Modèle » se remplit avec les modèles disponibles chez
   le fournisseur, les conseillés en tête. Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API
@@ -116,7 +120,7 @@ plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   ModelCatalog.cs         liste des modèles disponibles chez le fournisseur
 client/                 Client vocal (Python)
   engineer.py             boucle principale (dialogue avec le plugin)
-  stt.py / llm.py / tts.py / audio.py
+  stt.py / llm.py / tts.py / audio.py / ambience.py
   sample_snapshot.json    télémétrie d'exemple pour tester sans jeu
 install.ps1             installateur (dernière release)
 Installer-AIRaceEngineer.cmd   la même chose en double-clic

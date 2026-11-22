@@ -49,9 +49,20 @@ def beep(freq=1200.0, duration=0.06, rate=24000, volume=0.15):
     sd.play(tone.astype(np.float32), rate)
 
 
-def radio_fx(x: np.ndarray, rate: int) -> np.ndarray:
-    """Bande passante radio (300-3400 Hz), saturation légère, souffle et squelch."""
+# Niveau d'une F1 qui passe à 12 m du micro, par rapport à la voix (crête à 1)
+TRACK_LEVEL = 0.10
+
+
+def radio_fx(x: np.ndarray, rate: int, track=False) -> np.ndarray:
+    """Bande passante radio (300-3400 Hz), saturation légère, souffle et squelch.
+    track : des voitures passent derrière l'ingé, captées par son micro avant le filtre radio."""
     x = x.astype(np.float32)
+    x = x / (np.max(np.abs(x)) + 1e-9)
+    if track:
+        import ambience
+        pad = np.zeros(int(rate * 0.12))  # le micro s'ouvre un instant avant que l'ingé parle
+        x = np.concatenate([pad, x, pad])
+        x = x + TRACK_LEVEL * ambience.track(len(x), rate) * ambience.duck(x, rate)
     n = len(x)
     spectrum = np.fft.rfft(x)
     freqs = np.fft.rfftfreq(n, 1 / rate)
@@ -66,6 +77,6 @@ def radio_fx(x: np.ndarray, rate: int) -> np.ndarray:
 
     squelch_len = int(rate * 0.05)
     squelch = np.random.normal(0, 0.08, squelch_len) * np.linspace(1, 0, squelch_len)
-    gap = np.zeros(int(rate * 0.03))
+    gap = np.zeros(0 if track else int(rate * 0.03))
     out = np.concatenate([squelch, gap, y, gap, squelch[::-1]])
     return (out * 0.8).astype(np.float32)

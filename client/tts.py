@@ -127,6 +127,7 @@ class Voice:
     def __init__(self, tts_cfg: dict, elevenlabs_cfg: dict):
         engine = tts_cfg.get("engine", "neural")
         self.radio = bool(tts_cfg.get("radio_effect", True))
+        self.track = bool(tts_cfg.get("track_noise", True))
         self._tts_cfg = tts_cfg
         self._fallback = None
         if engine == "elevenlabs":
@@ -158,7 +159,7 @@ class Voice:
     def render(self, text: str) -> tuple[np.ndarray, int]:
         samples, rate = self._synth(text)
         if self.radio:
-            samples = audio.radio_fx(samples, rate)
+            samples = audio.radio_fx(samples, rate, track=self.track)
         return samples, rate
 
     def say(self, text: str):

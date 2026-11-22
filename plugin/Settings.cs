@@ -125,6 +125,7 @@ namespace AIRaceEngineer
         public string ElevenLabsKey { get; set; } = "";
         public string ElevenLabsVoiceId { get; set; } = "JBFqnCBsd6RMkjVDRZzb";
         public bool RadioEffect { get; set; } = true;
+        public bool TrackNoise { get; set; } = true;   // des F1 passent derrière l'ingé (avec l'effet radio)
         public string SttModel { get; set; } = "small"; // base = rapide, small = précis
 
         // Annonces automatiques
@@ -257,6 +258,7 @@ namespace AIRaceEngineer
                     neural_voice = NeuralVoice,
                     kokoro_speed = VoiceSpeed,
                     radio_effect = RadioEffect,
+                    track_noise = TrackNoise,
                 },
                 elevenlabs = new
                 {

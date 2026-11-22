@@ -1,0 +1,48 @@
+# Copie ce fichier en config.toml et remplis-le. config.toml n'est jamais commité.
+
+language = "fr"                                   # fr ou en (reconnaissance + réponses)
+snapshot_url = "http://127.0.0.1:8889/snapshot"   # endpoint du plugin SimHub
+greeting = "Radio check, je t'entends."           # phrase au démarrage ("" pour rien)
+
+[ptt]
+# Push-to-talk : maintiens le bouton, parle, relâche.
+# Trouve le numéro de ton bouton avec :  uv run engineer.py --list-controls
+keyboard_key = "f8"        # touche clavier ("" pour désactiver)
+joystick_button = -1       # numéro du bouton du volant (-1 = désactivé)
+joystick_name = ""         # partie du nom du périphérique (ex. "Fanatec"), vide = n'importe lequel
+
+[stt]
+# Whisper en local, gratuit. tiny/base = très rapide, small = bon compromis, medium = précis mais lourd.
+model = "small"
+device = "cpu"             # "cuda" si tu as CUDA + cuDNN installés (plus rapide)
+compute_type = "int8"      # "float16" avec cuda
+input_device = ""          # nom ou numéro du micro, vide = micro par défaut
+
+[llm]
+# N'importe quelle API compatible OpenAI. Vérifie le nom exact du modèle chez ton fournisseur.
+#
+# Infomaniak (1M de crédits offerts) : token avec le scope "ai-tools" + Product ID dans le Manager
+base_url = "https://api.infomaniak.com/1/ai/TON_PRODUCT_ID/openai"
+api_key = ""
+model = "Ministral-3-14B"   # petit modèle rapide ; liste exacte dans ton Manager Infomaniak
+#
+# OpenAI :            base_url = "https://api.openai.com/v1"         model = "gpt-4.1-mini"
+# Claude :            base_url = "https://api.anthropic.com/v1/"     model = "claude-haiku-5-5"
+# Ollama (local) :    base_url = "http://localhost:11434/v1"         model = "qwen3:4b"   (api_key = "ollama")
+#                     -> gratuit, mais partage la carte graphique avec le jeu
+max_tokens = 120
+temperature = 0.3
+
+[tts]
+engine = "kokoro"          # "kokoro" (local, gratuit) ou "elevenlabs" (cloud, payant, ultra réaliste)
+radio_effect = true        # filtre radio + grésillement
+
+# Kokoro : voix FR = ff_siwis. Voix EN = bm_george, bm_lewis (britanniques), am_michael, am_adam (US).
+# Le modèle (~330 Mo) est téléchargé automatiquement au premier lancement dans client/models/.
+kokoro_voice = "ff_siwis"
+kokoro_speed = 1.15
+
+[elevenlabs]
+api_key = ""
+voice_id = "JBFqnCBsd6RMkjVDRZzb"   # "George" ; n'importe quelle voix de ta bibliothèque ElevenLabs
+model = "eleven_flash_v2_5"        # le plus rapide, multilingue

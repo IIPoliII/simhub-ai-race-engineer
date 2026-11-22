@@ -1,0 +1,15 @@
+# Secrets
+client/config.toml
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+client/models/
+
+# .NET
+plugin/bin/
+plugin/obj/
+.vs/
+*.user

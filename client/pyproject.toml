@@ -1,0 +1,18 @@
+[project]
+name = "ai-race-engineer"
+version = "0.1.0"
+description = "Ingénieur de course IA vocal pour SimHub (tous les jeux)"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+    "faster-whisper>=1.1",   # reconnaissance vocale locale (gratuit)
+    "kokoro-onnx>=0.4",      # voix locale réaliste (gratuit)
+    "openai>=1.40",          # client compatible Infomaniak / OpenAI / Claude / Ollama
+    "httpx>=0.27",
+    "numpy>=1.26",
+    "sounddevice>=0.5",      # micro + haut-parleurs
+    "pygame>=2.6",           # boutons du volant
+    "pynput>=1.7",           # touche clavier
+]
+
+[tool.uv]
+package = false

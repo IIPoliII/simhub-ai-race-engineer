@@ -1,0 +1,80 @@
+{
+  "game_running": true,
+  "game": "AssettoCorsaCompetizione",
+  "session": {
+    "type": "Race",
+    "track": "spa",
+    "car": "Porsche 992 GT3 R",
+    "car_class": "GT3",
+    "time_left": "0:38:12.000",
+    "total_laps": null,
+    "remaining_laps": null,
+    "air_temp": 22.0,
+    "track_temp": 31.5,
+    "temp_unit": "C",
+    "flag": null
+  },
+  "me": {
+    "position": 6,
+    "field_size": 24,
+    "lap": 9,
+    "current_lap_time": "1:02.415",
+    "last_lap": "2:18.904",
+    "best_lap": "2:18.311",
+    "session_best_lap": "2:17.652",
+    "delta_to_best": 0.42,
+    "lap_valid": true,
+    "gap_to_leader": 11.8,
+    "in_pit_lane": false,
+    "speed_kmh": 243,
+    "gear": "6"
+  },
+  "fuel": {
+    "level": 54.3,
+    "capacity": 120.0,
+    "unit": "L",
+    "estimated_laps_left": 13.4
+  },
+  "tyres": {
+    "compound": "Dry",
+    "pressure_unit": "PSI",
+    "pressure": { "fl": 27.6, "fr": 27.9, "rl": 27.3, "rr": 27.5 },
+    "temperature": { "fl": 84, "fr": 89, "rl": 81, "rr": 83 },
+    "wear_pct": null,
+    "brake_temperature": { "fl": 512, "fr": 548, "rl": 402, "rr": 415 }
+  },
+  "car": {
+    "damage_avg_pct": 0.0,
+    "tc": 3,
+    "abs": 2,
+    "brake_bias": 52.5,
+    "engine_map": 1
+  },
+  "car_ahead": {
+    "name": "Marco Bianchi",
+    "car": "Ferrari 296 GT3",
+    "position": 5,
+    "gap_s": 1.4,
+    "laps_apart": null,
+    "last_lap": "2:19.310",
+    "best_lap": "2:18.050",
+    "in_pit": false,
+    "pit_stops": 0
+  },
+  "car_behind": {
+    "name": "Lukas Weber",
+    "car": "BMW M4 GT3",
+    "position": 7,
+    "gap_s": 0.8,
+    "laps_apart": null,
+    "last_lap": "2:18.402",
+    "best_lap": "2:18.402",
+    "in_pit": false,
+    "pit_stops": 0
+  },
+  "recent_laps": [
+    { "lap": 6, "time": "2:18.640", "fuel_used": 4.05 },
+    { "lap": 7, "time": "2:18.311", "fuel_used": 4.02 },
+    { "lap": 8, "time": "2:18.904", "fuel_used": 4.08 }
+  ]
+}

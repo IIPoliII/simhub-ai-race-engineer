@@ -33,13 +33,41 @@
     if ($new.Name -ne 'AIRaceEngineer') { throw "Le fichier téléchargé n'est pas le plugin attendu." }
     Write-Host "Version $($new.Version)"
 
-    # 3. SimHub doit être fermé
+    # 3. Client vocal, dans le profil utilisateur (pas besoin des droits admin)
+    $dataDir = Join-Path $env:LOCALAPPDATA 'AIRaceEngineer'
+    $clientDir = Join-Path $dataDir 'client'
+    $zip = Join-Path $tmpDir 'client.zip'
+    Write-Host "Installation du client vocal dans $clientDir..."
+    Invoke-WebRequest "https://github.com/$repo/releases/latest/download/client.zip" -OutFile $zip -UseBasicParsing
+    New-Item -ItemType Directory -Force $clientDir | Out-Null
+    Expand-Archive $zip -DestinationPath $clientDir -Force   # garde .venv et les modèles déjà téléchargés
+
+    $uv = @("$env:USERPROFILE\.local\bin\uv.exe", "$env:USERPROFILE\.cargo\bin\uv.exe") | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if (-not $uv) { $uv = (Get-Command uv -ErrorAction SilentlyContinue).Source }
+    if (-not $uv) {
+        Write-Host "Installation de uv (gestionnaire Python d'Astral)..."
+        powershell -NoProfile -ExecutionPolicy Bypass -Command "irm https://astral.sh/uv/install.ps1 | iex" | Out-Host
+        $uv = "$env:USERPROFILE\.local\bin\uv.exe"
+        if (-not (Test-Path $uv)) { throw "uv n'a pas pu être installé." }
+    }
+
+    Push-Location $clientDir
+    try {
+        Write-Host "Installation des dépendances Python (première fois : quelques minutes)..."
+        & $uv sync --no-progress
+        if ($LASTEXITCODE -ne 0) { throw "uv sync a échoué." }
+        Write-Host "Téléchargement de la voix et de la reconnaissance vocale (~1 Go la première fois)..."
+        & $uv run --no-progress engineer.py --prepare
+        if ($LASTEXITCODE -ne 0) { throw "Le téléchargement des modèles a échoué." }
+    } finally { Pop-Location }
+
+    # 4. SimHub doit être fermé pour remplacer le plugin
     if (Get-Process SimHubWPF -ErrorAction SilentlyContinue) {
         Write-Host "Ferme SimHub pour continuer..." -ForegroundColor Yellow
         while (Get-Process SimHubWPF -ErrorAction SilentlyContinue) { Start-Sleep -Seconds 1 }
     }
 
-    # 4. Copier (Program Files demande les droits admin)
+    # 5. Copier (Program Files demande les droits admin)
     $target = Join-Path $simhub $dllName
     $copy = "Remove-Item '$target.old' -Force -ErrorAction SilentlyContinue; Copy-Item '$tmp' '$target' -Force"
     try {
@@ -56,6 +84,7 @@
 
     Write-Host ""
     Write-Host "AI Race Engineer $installed installé." -ForegroundColor Green
-    Write-Host "Lance SimHub et accepte d'activer le plugin : il apparaît dans le menu de gauche."
-    Write-Host "Les mises à jour se feront ensuite depuis la page du plugin."
+    Write-Host "Lance SimHub et accepte d'activer le plugin : il apparaît dans le menu de gauche,"
+    Write-Host "règle-le là (IA, langue, voix, annonces) et associe le push-to-talk dans Controls and events."
+    Write-Host "Le client vocal démarre tout seul avec SimHub. Les mises à jour se font depuis la page du plugin."
 }

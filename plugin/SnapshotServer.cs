@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
@@ -10,19 +11,20 @@ namespace AIRaceEngineer
     /// <summary>
     /// Mini serveur HTTP sur 127.0.0.1 uniquement. TcpListener plutôt que HttpListener :
     /// aucun droit admin ni réservation d'URL nécessaire.
+    /// Le routeur reçoit (chemin, paramètres) et renvoie du JSON, ou null pour un 404.
     /// </summary>
     internal sealed class SnapshotServer
     {
         private readonly int _port;
-        private readonly Func<string> _getJson;
+        private readonly Func<string, Dictionary<string, string>, string> _route;
         private TcpListener _listener;
         private Thread _thread;
         private volatile bool _running;
 
-        public SnapshotServer(int port, Func<string> getJson)
+        public SnapshotServer(int port, Func<string, Dictionary<string, string>, string> route)
         {
             _port = port;
-            _getJson = getJson;
+            _route = route;
         }
 
         public void Start()
@@ -50,10 +52,12 @@ namespace AIRaceEngineer
                     {
                         client.ReceiveTimeout = 1000;
                         client.SendTimeout = 1000;
+                        client.NoDelay = true;
                         Handle(client.GetStream());
                     }
                 }
                 catch (SocketException) when (!_running) { }
+                catch (ObjectDisposedException) when (!_running) { }
                 catch (Exception ex)
                 {
                     if (_running) SimHub.Logging.Current.Warn("[AI Race Engineer] http: " + ex.Message);
@@ -77,7 +81,10 @@ namespace AIRaceEngineer
             }
 
             var parts = requestLine.Split(' ');
-            var path = parts.Length > 1 ? parts[1] : "/";
+            var target = parts.Length > 1 ? parts[1] : "/";
+            int q = target.IndexOf('?');
+            var path = q >= 0 ? target.Substring(0, q) : target;
+            var query = ParseQuery(q >= 0 ? target.Substring(q + 1) : "");
 
             string status = "200 OK";
             string body;
@@ -89,12 +96,14 @@ namespace AIRaceEngineer
                 status = "403 Forbidden";
                 body = "{\"error\":\"forbidden\"}";
             }
-            else if (path == "/" || path.StartsWith("/snapshot"))
-                body = _getJson();
             else
             {
-                status = "404 Not Found";
-                body = "{\"error\":\"not found\"}";
+                body = _route(path == "/" ? "/snapshot" : path, query);
+                if (body == null)
+                {
+                    status = "404 Not Found";
+                    body = "{\"error\":\"not found\"}";
+                }
             }
 
             var bytes = Encoding.UTF8.GetBytes(body);
@@ -107,6 +116,19 @@ namespace AIRaceEngineer
             stream.Write(header, 0, header.Length);
             stream.Write(bytes, 0, bytes.Length);
             stream.Flush();
+        }
+
+        private static Dictionary<string, string> ParseQuery(string query)
+        {
+            var result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var pair in query.Split(new[] { '&' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                int eq = pair.IndexOf('=');
+                var key = Uri.UnescapeDataString((eq >= 0 ? pair.Substring(0, eq) : pair).Replace('+', ' '));
+                var value = eq >= 0 ? Uri.UnescapeDataString(pair.Substring(eq + 1).Replace('+', ' ')) : "";
+                result[key] = value;
+            }
+            return result;
         }
     }
 }

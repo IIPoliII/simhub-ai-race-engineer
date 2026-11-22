@@ -28,7 +28,9 @@ namespace AIRaceEngineer
         public bool Installed { get; private set; }
         public bool UpdateAvailable => !Installed && Latest != null && Latest > Current;
 
-        private string _downloadUrl;
+        public const string ClientAssetName = "client.zip";
+
+        private string _downloadUrl, _clientUrl;
 
         public void CheckAsync()
         {
@@ -36,10 +38,10 @@ namespace AIRaceEngineer
             Task.Run(() => Run(Check));
         }
 
-        public void InstallAsync()
+        public void InstallAsync(ClientRunner client)
         {
             if (Busy || !UpdateAvailable) return;
-            Task.Run(() => Run(Install));
+            Task.Run(() => Run(() => Install(client)));
         }
 
         private void Run(Action action)
@@ -87,17 +89,22 @@ namespace AIRaceEngineer
 
             Latest = Trim(latest);
             _downloadUrl = (string)asset["browser_download_url"];
+            _clientUrl = (string)(release["assets"] as JArray)?.FirstOrDefault(a => (string)a["name"] == ClientAssetName)?["browser_download_url"];
             State = UpdateAvailable ? $"Version {Latest} disponible." : "Tu as la dernière version.";
         }
 
-        private void Install()
+        private void Install(ClientRunner client)
         {
             State = $"Téléchargement de la version {Latest}...";
             var dir = Path.Combine(Path.GetTempPath(), "AIRaceEngineer-update");
             Directory.CreateDirectory(dir);
             var downloaded = Path.Combine(dir, AssetName);
+            var clientZip = Path.Combine(dir, ClientAssetName);
             using (var wc = Client())
+            {
                 wc.DownloadFile(_downloadUrl, downloaded);
+                if (_clientUrl != null) wc.DownloadFile(_clientUrl, clientZip);
+            }
 
             // Vérifie que c'est bien notre plugin, dans la version annoncée
             var name = AssemblyName.GetAssemblyName(downloaded);
@@ -131,8 +138,33 @@ namespace AIRaceEngineer
             if (process.ExitCode != 0 || Trim(AssemblyName.GetAssemblyName(target).Version) != Latest)
                 throw new InvalidOperationException("la copie a échoué. Ferme SimHub et relance l'installateur.");
 
+            // Le client vocal est dans le profil utilisateur : pas besoin de droits admin
+            if (_clientUrl != null)
+            {
+                State = "Mise à jour du client vocal...";
+                client.Stop();
+                ExtractOver(clientZip, ClientRunner.ClientDir);
+            }
+
             Installed = true;
             State = $"Version {Latest} installée. Redémarre SimHub pour l'utiliser.";
+        }
+
+        /// <summary>Extrait l'archive par-dessus le dossier existant (garde .venv et les modèles téléchargés).</summary>
+        internal static void ExtractOver(string zipPath, string targetDir)
+        {
+            var root = Path.GetFullPath(targetDir).TrimEnd('\\') + "\\";
+            using (var zip = System.IO.Compression.ZipFile.OpenRead(zipPath))
+            {
+                foreach (var entry in zip.Entries)
+                {
+                    var dest = Path.GetFullPath(Path.Combine(root, entry.FullName));
+                    if (!dest.StartsWith(root, StringComparison.OrdinalIgnoreCase)) continue; // zip slip
+                    if (string.IsNullOrEmpty(entry.Name)) { Directory.CreateDirectory(dest); continue; }
+                    Directory.CreateDirectory(Path.GetDirectoryName(dest));
+                    System.IO.Compression.ZipFileExtensions.ExtractToFile(entry, dest, true);
+                }
+            }
         }
 
         private static Version Trim(Version v) => new Version(v.Major, v.Minor, Math.Max(v.Build, 0));

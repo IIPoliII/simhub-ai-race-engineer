@@ -25,6 +25,11 @@ SYSTEM = {
 - No markdown, lists or emoji: your text is read aloud.""",
 }
 
+NOT_CONFIGURED = {
+    "fr": "L'IA n'est pas configurée. Choisis un fournisseur et une clé dans la page du plugin dans SimHub.",
+    "en": "The AI is not set up. Pick a provider and an API key in the plugin page in SimHub.",
+}
+
 NO_DATA = {
     "fr": "Pas de télémétrie pour l'instant, vérifie que SimHub tourne avec le plugin.",
     "en": "No telemetry right now, check that SimHub is running with the plugin.",
@@ -38,9 +43,12 @@ class Engineer:
         self.model = cfg["model"]
         self.max_tokens = int(cfg.get("max_tokens", 120))
         self.temperature = float(cfg.get("temperature", 0.3))
+        self.configured = bool(cfg.get("configured", True))
         self.history = deque(maxlen=6)  # 3 derniers échanges, pour « et derrière ? »
 
     def ask(self, question: str, snapshot: dict | None) -> str:
+        if not self.configured:
+            return NOT_CONFIGURED[self.language]
         if not snapshot or not snapshot.get("game_running"):
             return NO_DATA[self.language]
 

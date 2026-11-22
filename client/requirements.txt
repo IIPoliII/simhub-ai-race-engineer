@@ -5,5 +5,3 @@ openai>=1.40
 httpx>=0.27
 numpy>=1.26
 sounddevice>=0.5
-pygame>=2.6
-pynput>=1.7

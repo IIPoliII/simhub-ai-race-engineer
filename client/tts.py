@@ -15,10 +15,15 @@ KOKORO_FILES = {
 KOKORO_LANG = {"a": "en-us", "b": "en-gb", "f": "fr-fr", "e": "es", "i": "it", "p": "pt-br", "h": "hi", "j": "ja", "z": "cmn"}
 
 
+# Remplacé par engineer.py pour afficher la progression dans la page du plugin SimHub
+progress = print
+
+
 def _download(url: str, dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    print(f"Téléchargement de {dest.name}...")
+    progress(f"Téléchargement de la voix ({dest.name})...")
+    last_step = -1
     with httpx.stream("GET", url, follow_redirects=True, timeout=60) as r:
         r.raise_for_status()
         total = int(r.headers.get("content-length", 0))
@@ -27,9 +32,10 @@ def _download(url: str, dest: Path):
             for chunk in r.iter_bytes(1 << 20):
                 f.write(chunk)
                 done += len(chunk)
-                if total:
-                    print(f"\r  {done * 100 // total:3d} %", end="", flush=True)
-    print()
+                step = done * 10 // total if total else 0
+                if step != last_step:
+                    last_step = step
+                    progress(f"Téléchargement de la voix ({dest.name}) : {step * 10} %")
     tmp.replace(dest)
 
 
@@ -54,7 +60,7 @@ class ElevenLabsVoice:
 
     def __init__(self, cfg: dict):
         if not cfg.get("api_key"):
-            raise SystemExit("ElevenLabs : renseigne [elevenlabs] api_key dans config.toml")
+            raise ValueError("clé API ElevenLabs manquante dans la page du plugin")
         self.http = httpx.Client(
             base_url="https://api.elevenlabs.io",
             headers={"xi-api-key": cfg["api_key"]},

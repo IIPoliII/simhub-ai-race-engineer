@@ -2,19 +2,14 @@
 
 Un ingénieur de course vocal pour **tous les jeux supportés par SimHub** (ACC, iRacing, LMU, rFactor 2, AC, F1...).
 Tu maintiens un bouton du volant, tu poses ta question comme tu veux (« il est à combien le mec devant ? »,
-« mes pneus ça va ? », « j'ai assez d'essence ? »), et l'ingé te répond à la radio.
+« mes pneus ça va ? », « j'ai assez d'essence ? »), et l'ingé te répond à la radio. Il t'annonce aussi tout seul
+ton temps au tour, tes écarts, tes changements de place et quand le carburant devient juste.
 
 ```
-Jeu ──► SimHub ──► plugin AI Race Engineer ──► http://127.0.0.1:8889/snapshot (JSON)
-                                                     │
- bouton volant ─► micro ─► Whisper (local) ─► LLM (Infomaniak / OpenAI / Claude / Ollama)
-                                                     │
-                              haut-parleurs ◄─ voix Kokoro (local) ou ElevenLabs + effet radio
+Jeu ──► SimHub ──► plugin AI Race Engineer (réglages, annonces, push-to-talk, télémétrie JSON)
+                                │
+             client vocal (lancé tout seul) : micro ─► Whisper local ─► IA ─► voix Kokoro / ElevenLabs
 ```
-
-- **Plugin SimHub (C#)** : lit la télémétrie déjà unifiée par SimHub et l'expose en JSON en local.
-  Un seul code pour tous les jeux.
-- **Client (Python)** : push-to-talk, reconnaissance vocale, LLM et voix.
 
 ## Ce que ça coûte
 
@@ -22,21 +17,12 @@ Jeu ──► SimHub ──► plugin AI Race Engineer ──► http://127.0.0.
 |---|---|---|
 | Reconnaissance vocale | Whisper local (faster-whisper) | gratuit |
 | Voix | Kokoro local, voix réaliste | gratuit |
-| Cerveau (LLM) | Infomaniak, 1M de crédits offerts | quelques centimes par course |
+| Annonces automatiques | générées par le plugin, sans IA | gratuit |
+| Questions (IA) | Infomaniak (1M de crédits offerts), Cloudflare (quota gratuit quotidien), OpenAI ou Claude | quelques centimes par course |
 | Option voix premium | ElevenLabs Flash | payant |
-| Option LLM 100 % local | Ollama | gratuit, mais partage la carte graphique avec le jeu |
+| Option IA 100 % locale | Ollama (fournisseur « Autre ») | gratuit, mais partage la carte graphique avec le jeu |
 
 ## Installation
-
-### Prérequis
-
-- Windows et [SimHub](https://www.simhubdash.com/)
-- [uv](https://docs.astral.sh/uv/) pour le client vocal (il installe tout seul le bon Python) :
-  ```powershell
-  powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
-  ```
-
-### 1. Le plugin SimHub
 
 Télécharge **`Installer-AIRaceEngineer.cmd`** depuis la [dernière release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
 et double-clique dessus. Tu peux aussi coller cette commande dans PowerShell :
@@ -45,63 +31,39 @@ et double-clique dessus. Tu peux aussi coller cette commande dans PowerShell :
 irm https://raw.githubusercontent.com/IIPoliII/simhub-ai-race-engineer/main/install.ps1 | iex
 ```
 
-L'installateur trouve SimHub, télécharge la dernière version du plugin, attend que SimHub soit fermé, puis copie
-la DLL. Windows demande les droits admin, car SimHub est installé dans Program Files. Rien à compiler.
+L'installateur :
+1. trouve SimHub ;
+2. installe le client vocal dans `%LOCALAPPDATA%\AIRaceEngineer`, avec [uv](https://docs.astral.sh/uv/) et Python
+   si besoin, puis télécharge la voix et la reconnaissance vocale (~1 Go la première fois) ;
+3. attend que SimHub soit fermé et copie le plugin. Windows demande les droits admin, car SimHub est dans
+   Program Files.
 
-Relance SimHub et accepte d'activer **AI Race Engineer**. Le plugin apparaît alors dans le menu de gauche de
-SimHub, avec son statut en direct. S'il n'y est pas, active-le dans Settings → Plugins.
-Lance une session en jeu : le statut passe au vert et <http://127.0.0.1:8889/snapshot> affiche ta télémétrie en JSON.
+Rien à compiler, rien à configurer en ligne de commande.
 
-**Mises à jour** : au démarrage de SimHub, le plugin vérifie s'il existe une nouvelle version. Si oui, clique sur
-« Installer la version X » dans sa page, accepte la demande d'autorisation et redémarre SimHub.
+## Réglages
 
-### 2. Le client vocal
+Relance SimHub et accepte d'activer **AI Race Engineer** : il apparaît dans le menu de gauche (sinon : Settings → Plugins).
+Tout se règle dans sa page :
 
-```powershell
-cd client
-copy config.example.toml config.toml
-```
+- **Langue et voix** : français ou anglais (par défaut, la langue de ton Windows), voix selon la langue
+  (en anglais, `George` sonne très « ingé britannique »), ElevenLabs en option, effet radio, reconnaissance rapide ou précise.
+- **Intelligence artificielle** : Infomaniak, Cloudflare, OpenAI, Claude, ou n'importe quelle API compatible
+  OpenAI (Ollama...). Le bouton **Tester la connexion** vérifie la clé et le modèle.
+  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools).
+  - Cloudflare : un token API Workers AI et ton Account ID.
+- **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière,
+  places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours).
+- **Push-to-talk** : dans **Controls and events**, ajoute un mapping avec l'action
+  `AIRaceEnginePlugin.PushToTalk` et appuie sur le bouton de ton volant. La page du plugin montre en direct
+  si le bouton est détecté.
 
-Dans `config.toml`, remplis au minimum la section `[llm]` (clé API et modèle). Pour Infomaniak : crée un token
-avec le scope `ai-tools` et récupère ton Product ID dans Manager → AI Tools.
+Les clés API sont enregistrées chiffrées (DPAPI Windows) dans `%LOCALAPPDATA%\AIRaceEngineer\settings.json`.
 
-Ensuite, trouve le bouton de ton volant :
+Le client vocal démarre et s'arrête avec SimHub. Sa page affiche son état, et propose « Tester la voix »
+et « Journal du client » en cas de souci.
 
-```powershell
-uv run engineer.py --list-controls
-```
-
-Appuie sur le bouton voulu, puis reporte `joystick_button` (et `joystick_name`) dans `[ptt]`.
-
-Teste la voix, puis l'ingé sans lancer de jeu :
-
-```powershell
-uv run engineer.py --say "Box box, box box."
-uv run engineer.py --ask "il est à combien le mec devant ?" --snapshot sample_snapshot.json
-```
-
-Au premier lancement, le client télécharge la voix Kokoro (~330 Mo) et le modèle Whisper (~480 Mo).
-
-### 3. En course
-
-```powershell
-uv run engineer.py
-```
-
-Maintiens le bouton, parle, relâche. Si tu appuies pendant que l'ingé parle, ça le coupe.
-
-> Sans uv : `py -3.12 -m venv .venv`, puis `.venv\Scripts\pip install -r requirements.txt` et
-> `.venv\Scripts\python engineer.py`. Utilise Python 3.11 ou 3.12 : certaines dépendances n'existent pas
-> encore pour les versions plus récentes.
-
-## Configuration
-
-Tout se règle dans `client/config.toml` (voir les commentaires de [config.example.toml](client/config.example.toml)).
-
-- **Langue** : `language = "fr"` ou `"en"`. En anglais, la voix `bm_george` sonne très « ingé britannique ».
-- **Voix réaliste payante** : `[tts] engine = "elevenlabs"`, puis remplis `[elevenlabs]`.
-- **Changer de LLM** : il suffit de modifier `base_url` et `model`. Toute API compatible OpenAI fonctionne.
-- **Effet radio** : `radio_effect = false` pour une voix propre.
+**Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, clique sur
+« Installer la version X », accepte la demande d'autorisation et redémarre SimHub. Le client vocal est mis à jour en même temps.
 
 ## Latence
 
@@ -109,13 +71,12 @@ Mesurée sur CPU, sans GPU :
 
 | Étape | Temps |
 |---|---|
-| Whisper `small` (question de 3-4 s) | ~1,3 s |
-| Whisper `base` | ~0,4 s, un peu moins précis |
-| LLM cloud (petit modèle) | ~0,5-1 s |
+| Reconnaissance précise (Whisper `small`, question de 3-4 s) | ~1,3 s |
+| Reconnaissance rapide (Whisper `base`) | ~0,4 s |
+| IA cloud (petit modèle) | ~0,5-1 s |
 | Voix Kokoro (une phrase) | ~0,8 s |
 
-Pour aller plus vite : `model = "base"`, ou Whisper sur GPU (`device = "cuda"`, `compute_type = "float16"`).
-Le temps de chaque étape s'affiche après chaque réponse.
+Les annonces automatiques n'ont pas besoin de reconnaissance vocale ni d'IA : elles partent directement.
 
 ## Ce que l'ingé sait
 
@@ -132,37 +93,42 @@ les voitures de ta classe.
 
 ```
 plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
-  AIRaceEnginePlugin.cs   construit l'instantané JSON (4 fois par seconde)
+  AIRaceEnginePlugin.cs   télémétrie JSON, file d'annonces, push-to-talk
+  Callouts.cs             annonces automatiques (tour, écarts, positions, carburant)
+  Settings.cs             réglages, fournisseurs d'IA, voix, config envoyée au client
+  SettingsControl.cs      page du plugin dans SimHub
+  ClientRunner.cs         lance le client vocal en arrière-plan
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
-  SettingsControl.cs      panneau de statut et de mises à jour dans le menu de SimHub
-  Updater.cs              vérifie et installe les nouvelles releases GitHub
-install.ps1             installateur (télécharge la dernière release)
-Installer-AIRaceEngineer.cmd   la même chose en double-clic
-dev-install.ps1         [dev] compile depuis les sources et installe (.NET SDK requis)
-release.ps1             [mainteneur] publie une release avec la DLL
+  Updater.cs              mises à jour depuis les releases GitHub
+  LlmTester.cs            bouton « Tester la connexion »
 client/                 Client vocal (Python)
-  engineer.py             point d'entrée et boucle push-to-talk
-  stt.py / llm.py / tts.py / ptt.py / audio.py / telemetry.py
+  engineer.py             boucle principale (dialogue avec le plugin)
+  stt.py / llm.py / tts.py / audio.py
   sample_snapshot.json    télémétrie d'exemple pour tester sans jeu
+install.ps1             installateur (dernière release)
+Installer-AIRaceEngineer.cmd   la même chose en double-clic
+dev-install.ps1         [dev] compile le plugin depuis les sources et l'installe
+release.ps1             [mainteneur] publie une release (DLL + client.zip + installateur)
 ```
 
 ## Développement
 
-Pour compiler le plugin, il faut le [.NET SDK](https://dotnet.microsoft.com/download) 8 ou plus récent
-(Visual Studio n'est pas nécessaire). SimHub doit être fermé :
+Plugin : [.NET SDK](https://dotnet.microsoft.com/download) 8 ou plus récent (Visual Studio n'est pas nécessaire).
+SimHub fermé, puis `.\dev-install.ps1`.
+
+Client : `cd client`, puis `uv run engineer.py` (SimHub doit tourner avec le plugin). Pour tester sans jeu :
 
 ```powershell
-.\dev-install.ps1
+uv run engineer.py --say "Box box, box box."
+uv run engineer.py --ask "il est à combien le mec devant ?" --snapshot sample_snapshot.json
 ```
 
-Pour publier une nouvelle version, monte `<Version>` dans `plugin/AIRaceEngineer.csproj`, commite, pousse, puis
-lance `.\release.ps1`. Les plugins installés la proposeront au prochain démarrage de SimHub.
+Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj`, commite, pousse, puis lance `.\release.ps1`.
 
 ## Idées pour la suite
 
-- Annonces automatiques sans question : carburant bas, dernier tour, voiture qui revient fort derrière.
-- Réponses directes sans LLM pour les questions simples (écart devant), pour gagner en latence.
-- Bouton push-to-talk directement dans SimHub (Controls & Events).
+- Réponses directes sans IA pour les questions simples (écart devant), pour gagner en latence.
+- Annonces de stratégie : fenêtre d'arrêt aux stands, voiture qui revient fort derrière.
 
 ## Licence
 

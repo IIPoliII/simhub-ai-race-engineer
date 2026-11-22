@@ -10,8 +10,6 @@ dependencies = [
     "httpx>=0.27",
     "numpy>=1.26",
     "sounddevice>=0.5",      # micro + haut-parleurs
-    "pygame>=2.6",           # boutons du volant
-    "pynput>=1.7",           # touche clavier
 ]
 
 [tool.uv]

@@ -267,6 +267,8 @@ def prepare():
     for size in ("small", "base"):
         print(f"Téléchargement de la reconnaissance vocale ({size})...", flush=True)
         download_model(size)
+    # Repère lu par le plugin : la mise en route est faite (sinon il la relance au démarrage de SimHub)
+    (Path(sys.prefix) / "air-prepared").write_text("ok")
     print("Modèles prêts.", flush=True)
 
 

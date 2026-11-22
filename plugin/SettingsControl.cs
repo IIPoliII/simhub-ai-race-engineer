@@ -368,6 +368,8 @@ namespace AIRaceEngineer
                     _clientCell.Set("Connecté", status, Theme.B("Warn"));
                 else _clientCell.Set("Chargement", status, Theme.B("AccentLine"));
             }
+            else if (client.Running && client.SetupStep is string step)
+                _clientCell.Set("Installation", client.SetupDetail is string detail ? step + "\n" + detail : step, Theme.B("AccentLine"));
             else if (client.Running) _clientCell.Set("Démarrage", "Le premier lancement peut prendre une minute", Theme.B("AccentLine"));
             else if (client.LastError != null) _clientCell.Set("Arrêté", client.LastError, Theme.B("Bad"));
             else _clientCell.Set("Arrêté", S.AutoStartClient ? "Démarrage automatique dans un instant" : "Démarrage automatique désactivé", Theme.B("Muted"));

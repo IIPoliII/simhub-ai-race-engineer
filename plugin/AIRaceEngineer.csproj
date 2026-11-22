@@ -6,7 +6,7 @@
     <RootNamespace>AIRaceEngineer</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <Version>0.4.6</Version>
+    <Version>0.4.7</Version>
     <!-- Dossier d'installation de SimHub (surchargeable : dotnet build -p:SimHubDir="D:\SimHub") -->
     <SimHubDir Condition="'$(SimHubDir)' == '' And '$(SIMHUB_INSTALL_PATH)' != ''">$(SIMHUB_INSTALL_PATH)</SimHubDir>
     <SimHubDir Condition="'$(SimHubDir)' == ''">C:\Program Files (x86)\SimHub</SimHubDir>

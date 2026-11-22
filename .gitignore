@@ -13,3 +13,6 @@ plugin/bin/
 plugin/obj/
 .vs/
 *.user
+
+# WiX (extensions téléchargées par release.ps1)
+.wix/

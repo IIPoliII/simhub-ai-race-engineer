@@ -1,0 +1,104 @@
+<!--
+  Installateur MSI d'AI Race Engineer (WiX 5), construit par release.ps1 en français et en anglais :
+    dotnet wix build installer\AIRaceEngineer.wxs -arch x64 -culture fr-FR -loc installer\fr-FR.wxl
+      -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext
+      -d Version=0.4.7 -d Root=<dépôt> -d Dll=<AIRaceEngineer.dll> -d ClientSrc=<fichiers du client>
+
+  Par utilisateur, sans demande admin : le dossier de SimHub est d'habitude ouvert en écriture aux utilisateurs.
+  - Le plugin va dans le dossier de SimHub (lu dans le registre, là où SimHub l'écrit).
+  - Le client vocal va dans %LOCALAPPDATA%\AIRaceEngineer\client. Python, ses dépendances et les modèles de voix
+    sont installés par le plugin au premier démarrage de SimHub : un programme lancé par Windows Installer ne peut pas
+    suivre les jonctions que uv crée dans le profil (erreur 448).
+  - Si SimHub tourne, Windows Installer propose de le fermer (gestionnaire de redémarrage), et l'écran de fin
+    propose de le relancer.
+  - La désinstallation retire le plugin, le client et ses modèles, et garde les réglages.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs"
+     xmlns:ui="http://wixtoolset.org/schemas/v4/wxs/ui"
+     xmlns:util="http://wixtoolset.org/schemas/v4/wxs/util">
+  <Package Name="!(loc.ProductName)"
+           Manufacturer="IIPoliII"
+           Version="$(Version)"
+           UpgradeCode="A228A2D8-BAAC-4221-99B1-239257A64C39"
+           Scope="perUser"
+           Language="!(loc.Lcid)">
+
+    <MajorUpgrade AllowSameVersionUpgrades="yes" DowngradeErrorMessage="!(loc.Downgrade)" />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/IIPoliII/simhub-ai-race-engineer" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/IIPoliII/simhub-ai-race-engineer#readme" />
+
+    <!-- Dossier de SimHub : écrit par son installateur dans le registre de l'utilisateur -->
+    <Property Id="SIMHUBDIR">
+      <RegistrySearch Id="SimHubDirSearch" Root="HKCU" Key="Software\SimHub" Name="InstallDirectory" Type="directory" />
+    </Property>
+    <Property Id="SIMHUBEXE">
+      <RegistrySearch Id="SimHubExeSearch" Root="HKCU" Key="Software\SimHub" Name="InstallDirectory" Type="directory">
+        <FileSearch Id="SimHubExe" Name="SimHubWPF.exe" />
+      </RegistrySearch>
+    </Property>
+    <Launch Condition="Installed OR SIMHUBEXE" Message="!(loc.NoSimHub)" />
+
+    <!-- SimHub ouvert : on demande de le fermer (le plugin chargé ne serait remplacé qu'au prochain démarrage) -->
+    <util:CloseApplication Id="CloseSimHub" Target="SimHubWPF.exe" Description="!(loc.CloseSimHub)"
+                           PromptToContinue="yes" RebootPrompt="no" />
+
+    <!-- Dossiers à vider à la désinstallation : leur chemin est retenu dans le registre -->
+    <Property Id="CLIENTDIRREM">
+      <RegistrySearch Id="ClientDirRem" Root="HKCU" Key="Software\AIRaceEngineer" Name="ClientDir" Type="raw" />
+    </Property>
+    <Property Id="UPDATEDIRREM">
+      <RegistrySearch Id="UpdateDirRem" Root="HKCU" Key="Software\AIRaceEngineer" Name="UpdateDir" Type="raw" />
+    </Property>
+
+    <StandardDirectory Id="ProgramFilesFolder">
+      <Directory Id="SIMHUBDIR" Name="SimHub" />
+    </StandardDirectory>
+    <StandardDirectory Id="LocalAppDataFolder">
+      <Directory Id="AppDir" Name="AIRaceEngineer">
+        <Directory Id="ClientDir" Name="client" />
+        <Directory Id="UpdateDir" Name="update" />
+      </Directory>
+    </StandardDirectory>
+
+    <Feature Id="Main" Title="AI Race Engineer">
+      <Component Id="Plugin" Directory="SIMHUBDIR" Guid="3F8C2B71-6D4E-4A9F-B0C3-8E5D7A1F2C64">
+        <File Id="PluginDll" Source="$(Dll)" KeyPath="yes" />
+        <!-- Restes d'une ancienne mise à jour -->
+        <RemoveFile Id="PluginOld" Name="AIRaceEngineer.dll.old" On="both" />
+      </Component>
+
+      <Component Id="Data" Directory="AppDir" Guid="6E0F3D1C-5B2A-4C8E-9F47-2D1B8A6C3E90">
+        <RegistryValue Root="HKCU" Key="Software\AIRaceEngineer" Name="ClientDir" Type="string" Value="[ClientDir]" KeyPath="yes" />
+        <RegistryValue Root="HKCU" Key="Software\AIRaceEngineer" Name="UpdateDir" Type="string" Value="[UpdateDir]" />
+        <!-- Pas pendant une mise à jour du MSI : on garde Python et les modèles déjà téléchargés -->
+        <util:RemoveFolderEx On="uninstall" Property="CLIENTDIRREM" Condition="NOT UPGRADINGPRODUCTCODE" />
+        <util:RemoveFolderEx On="uninstall" Property="UPDATEDIRREM" Condition="NOT UPGRADINGPRODUCTCODE" />
+        <RemoveFile Id="ClientLog" Name="client.log" On="uninstall" />
+        <RemoveFile Id="ApiToken" Name="api-token" On="uninstall" />
+        <RemoveFile Id="InstallLog" Name="install.log" On="uninstall" />
+        <RemoveFolder Id="RemoveClientDir" Directory="ClientDir" On="uninstall" />
+        <RemoveFolder Id="RemoveUpdateDir" Directory="UpdateDir" On="uninstall" />
+      </Component>
+
+      <!-- Client vocal : les fichiers suivis par git (ni .venv ni modèles) -->
+      <Files Directory="ClientDir" Include="$(ClientSrc)\**" />
+    </Feature>
+
+    <!-- Fin de l'installation : case « Lancer SimHub ». Passe par l'Explorateur pour que SimHub (et le client vocal
+         qu'il démarre) ne soit pas lancé par Windows Installer (cf. erreur 448 plus haut). -->
+    <SetProperty Id="WIXUI_EXITDIALOGOPTIONALCHECKBOXTEXT" Value="!(loc.LaunchSimHub)" Sequence="ui" Before="CostFinalize" Condition="NOT Installed" />
+    <Property Id="WIXUI_EXITDIALOGOPTIONALCHECKBOX" Value="1" />
+    <CustomAction Id="LaunchSimHub" Directory="SIMHUBDIR"
+                  ExeCommand="&quot;[WindowsFolder]explorer.exe&quot; &quot;[SIMHUBDIR]SimHubWPF.exe&quot;"
+                  Return="asyncNoWait" />
+
+    <UI>
+      <ui:WixUI Id="WixUI_Minimal" />
+      <Publish Dialog="ExitDialog" Control="Finish" Event="DoAction" Value="LaunchSimHub"
+               Condition="WIXUI_EXITDIALOGOPTIONALCHECKBOX = 1 AND NOT Installed" />
+    </UI>
+    <WixVariable Id="WixUILicenseRtf" Value="$(Root)\installer\License.rtf" />
+  </Package>
+</Wix>

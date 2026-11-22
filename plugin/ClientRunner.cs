@@ -9,6 +9,8 @@ namespace AIRaceEngineer
     /// <summary>
     /// Lance le client vocal Python (installé par l'installateur dans %LOCALAPPDATA%\AIRaceEngineer\client)
     /// en arrière-plan, sans fenêtre, et écrit sa sortie dans client.log.
+    /// Au premier démarrage, il le met d'abord en route tout seul : installe uv s'il manque, puis Python,
+    /// les dépendances et les modèles de voix (étapes affichées dans la page du plugin).
     /// </summary>
     public sealed class ClientRunner
     {
@@ -16,13 +18,24 @@ namespace AIRaceEngineer
         public static string LogPath => Path.Combine(EngineerSettings.DataDir, "client.log");
         private static readonly TimeSpan QuickExit = TimeSpan.FromSeconds(60);
 
+        private enum Phase { Client, InstallUv, Prepare }
+
         private readonly object _sync = new object();
         private Process _process;
+        private Phase _phase;
+        private bool _appendLog;
         private StreamWriter _log;
         private DateTime _startedAt;
         private string _lastLine;
 
         public string LastError { get; private set; }
+        /// <summary>Étape de la première mise en route en cours, sinon null.</summary>
+        public string SetupStep { get; private set; }
+        /// <summary>Dernière ligne de la mise en route (ex. « Téléchargement de la voix : 40 % »).</summary>
+        public string SetupDetail => SetupStep != null ? _lastLine : null;
+        /// <summary>Écrit dans le .venv par « engineer.py --prepare » quand Python et les modèles sont prêts :
+        /// une mise en route interrompue reprend au démarrage suivant.</summary>
+        private static string PreparedMarker => Path.Combine(ClientDir, ".venv", "air-prepared");
         /// <summary>Arrêts juste après le démarrage, d'affilée : au-delà de 3 on ne relance plus tout seul.</summary>
         public int QuickExits { get; private set; }
         public bool Installed => File.Exists(Path.Combine(ClientDir, "engineer.py"));
@@ -54,29 +67,47 @@ namespace AIRaceEngineer
                     return;
                 }
                 var uv = FindUv();
+                ProcessStartInfo psi;
                 if (uv == null)
                 {
-                    Fail("uv introuvable (" + Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin") + "). Relance l'installateur.");
-                    return;
+                    // uv (le gestionnaire Python d'Astral) installe ensuite Python lui-même, sans droits admin
+                    _phase = Phase.InstallUv;
+                    SetupStep = "Première mise en route (1/2) : installation de uv, le gestionnaire Python";
+                    psi = new ProcessStartInfo("powershell.exe",
+                        "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"irm https://astral.sh/uv/install.ps1 | iex\"");
+                }
+                else if (!File.Exists(PreparedMarker))
+                {
+                    _phase = Phase.Prepare;
+                    SetupStep = "Première mise en route (2/2) : Python, dépendances et modèles de voix (~1 Go, quelques minutes)";
+                    psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --prepare");
+                }
+                else
+                {
+                    _phase = Phase.Client;
+                    SetupStep = null;
+                    psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --managed");
                 }
 
                 try
                 {
                     Directory.CreateDirectory(EngineerSettings.DataDir);
                     _log?.Dispose();
-                    _log = new StreamWriter(LogPath, false, new UTF8Encoding(false)) { AutoFlush = true };
+                    // Après une étape de mise en route, on garde sa sortie dans le même journal
+                    // Partagé : SimHub peut recharger le plugin (nouvelle instance) avant d'avoir arrêté l'ancienne
+                    var stream = new FileStream(LogPath, _appendLog ? FileMode.Append : FileMode.Create, FileAccess.Write,
+                        FileShare.ReadWrite | FileShare.Delete);
+                    _log = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
+                    _appendLog = false;
                     _lastLine = null;
 
-                    var psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --managed")
-                    {
-                        WorkingDirectory = ClientDir,
-                        UseShellExecute = false,
-                        CreateNoWindow = true,
-                        RedirectStandardOutput = true,
-                        RedirectStandardError = true,
-                        StandardOutputEncoding = Encoding.UTF8,
-                        StandardErrorEncoding = Encoding.UTF8,
-                    };
+                    psi.WorkingDirectory = ClientDir;
+                    psi.UseShellExecute = false;
+                    psi.CreateNoWindow = true;
+                    psi.RedirectStandardOutput = true;
+                    psi.RedirectStandardError = true;
+                    psi.StandardOutputEncoding = Encoding.UTF8;
+                    psi.StandardErrorEncoding = Encoding.UTF8;
                     psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
                     psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
 
@@ -90,11 +121,12 @@ namespace AIRaceEngineer
                     process.Start();
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
-                    SimHub.Logging.Current.Info($"[AI Race Engineer] client vocal lancé ({uv}, {ClientDir})");
+                    SimHub.Logging.Current.Info($"[AI Race Engineer] {(_phase == Phase.Client ? "client vocal lancé" : "mise en route : " + _phase)} ({psi.FileName}, {ClientDir})");
                 }
                 catch (Exception ex)
                 {
                     _process = null;
+                    SetupStep = null;
                     Fail("Impossible de lancer le client : " + ex.Message);
                 }
             }
@@ -109,6 +141,23 @@ namespace AIRaceEngineer
                 _process = null;
                 int code;
                 try { code = process.ExitCode; } catch { code = -1; }
+                if (_phase != Phase.Client)
+                {
+                    var step = _phase;
+                    SetupStep = null;
+                    if (code == 0)
+                    {
+                        // Étape réussie : on enchaîne (étape suivante, puis le client)
+                        _appendLog = true;
+                        Start();
+                        return;
+                    }
+                    QuickExits++;
+                    Fail(step == Phase.InstallUv
+                        ? $"Installation de uv impossible (code {code}). Vérifie la connexion internet puis clique Démarrer."
+                        : $"Mise en route du client vocal impossible (code {code})" + (_lastLine != null ? " : " + _lastLine : ". Voir le journal."));
+                    return;
+                }
                 QuickExits = DateTime.UtcNow - _startedAt < QuickExit ? QuickExits + 1 : 0;
                 Fail($"Le client vocal s'est arrêté (code {code})" + (_lastLine != null ? " : " + _lastLine : "."));
             }
@@ -127,6 +176,9 @@ namespace AIRaceEngineer
             {
                 p = _process;
                 _process = null;
+                SetupStep = null;
+                try { _log?.Dispose(); } catch { }
+                _log = null;
             }
             if (p == null || p.HasExited) return;
             try

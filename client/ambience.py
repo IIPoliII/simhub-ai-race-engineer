@@ -24,10 +24,12 @@ def _box(x: np.ndarray, width: int) -> np.ndarray:
 
 
 def _noises(rng, n: int, rate: int, *bands):
-    """Bruits blancs filtrés dans chaque bande (lo, hi), tirés d'un même spectre aléatoire : une seule FFT."""
-    f = np.fft.rfftfreq(n, 1 / rate)
-    spec = np.fft.rfft(rng.normal(0, 1, n))
-    return [np.fft.irfft(spec * ((f > lo) & (f < hi)), n) for lo, hi in bands]
+    """Bruits blancs filtrés dans chaque bande (lo, hi), tirés directement dans le spectre.
+    Longueur en puissance de 2 : une FFT de taille quelconque (voire première) est jusqu'à 10 fois plus lente."""
+    m = 1 << (n - 1).bit_length()
+    f = np.fft.rfftfreq(m, 1 / rate)
+    spec = (rng.normal(0, 1, len(f)) + 1j * rng.normal(0, 1, len(f))) * np.sqrt(m / 2)
+    return [np.fft.irfft(spec * ((f > lo) & (f < hi)), m)[:n] for lo, hi in bands]
 
 
 def _rpm(rng, t: np.ndarray, rate: int) -> np.ndarray:
@@ -49,6 +51,7 @@ def _rpm(rng, t: np.ndarray, rate: int) -> np.ndarray:
 
 def _car(rng, n: int, rate: int, t0: float, far=False) -> np.ndarray:
     """Une voiture qui passe au plus près du micro à l'instant t0 (en secondes)."""
+    f32 = np.float32
     t = np.arange(n) / rate
     v = rng.uniform(55, 90)                                           # m/s, ~200 à 320 km/h
     d = rng.uniform(150, 400) if far else rng.uniform(18, 60)         # distance au micro au plus près
@@ -57,54 +60,73 @@ def _car(rng, n: int, rate: int, t0: float, far=False) -> np.ndarray:
     cos = x / r
     doppler = C / (C + v * cos)                                       # plus aigu en arrivant, plus grave en repartant
 
-    crank = np.cumsum(2 * np.pi * _rpm(rng, t, rate) / 60 * doppler / rate)
-    rough = 1 + 0.08 * _box(rng.normal(0, 1, n), int(rate / 120))     # explosions jamais identiques
+    # La phase du vilebrequin s'accumule en double précision, le reste se calcule en float32 (deux fois plus vite).
+    # Tous les ordres sont des multiples de 0,5 : modulo 4π, leurs phases restent exactes.
+    crank = np.mod(np.cumsum(2 * np.pi * _rpm(rng, t, rate) / 60 * doppler / rate), 4 * np.pi).astype(f32)
+    r = r.astype(f32)
+    rough = (1 + 0.08 * _box(rng.normal(0, 1, n), int(rate / 120))).astype(f32)  # explosions jamais identiques
     weights = WEIGHTS * rng.uniform(0.6, 1.4, len(WEIGHTS))           # chaque moteur a son timbre
 
-    sig = np.zeros(n)
+    sig = np.zeros(n, f32)
     base_hz = 11000 / 60 * 1.3
+    step = np.exp(-1.5 * r / 600)                                     # l'air étouffe les aigus avec la distance
+    air, k = np.ones(n, f32), 0
     for order, w in zip(ORDERS, weights):
         if order * base_hz > rate * 0.45:
             continue
-        air = np.exp(-order * r / 600)                                # l'air étouffe les aigus avec la distance
-        sig += w * air * np.sin(order * crank + rng.uniform(0, 2 * np.pi))
+        while k < round(order / 1.5):                                 # atténuation de l'ordre = step ** (ordre / 1,5)
+            air *= step
+            k += 1
+        sig += f32(w) * air * np.sin(f32(order) * crank + f32(rng.uniform(0, 2 * np.pi)))
     sig *= rough
 
     # le grain de l'échappement : un souffle qui claque à chaque explosion
     pulse = (0.5 + 0.5 * np.sin(3 * crank)) ** 2
-    exhaust, air = _noises(rng, n, rate, (400, 2500), (200, 1500))
-    sig += 0.25 * exhaust * pulse * np.exp(-r / 250)
+    exhaust, wind = _noises(rng, n, rate, (400, 2500), (200, 1500))
+    sig += f32(0.25) * exhaust.astype(f32) * pulse * np.exp(-r / 250)
 
     # le souffle de l'air et des pneus, qui enfle au passage : c'est lui qui rend le son naturel
-    sig += 0.35 * air * np.exp(-r / 120)
+    sig += f32(0.35) * wind.astype(f32) * np.exp(-r / 120)
 
     # sifflement du turbo et du moteur électrique, très discret
-    whine = np.cumsum(2 * np.pi * rng.uniform(2200, 3000) * doppler / rate)
-    sig += 0.02 * np.exp(-r / 80) * np.sin(whine)
+    whine = np.mod(np.cumsum(2 * np.pi * rng.uniform(2200, 3000) * doppler / rate), 2 * np.pi).astype(f32)
+    sig += f32(0.02) * np.exp(-r / 80) * np.sin(whine)
 
-    level = 12 / r * (1 + 0.2 * cos)                                  # l'échappement est à l'arrière
+    level = (12 / r * (1 + 0.2 * cos)).astype(f32)                    # l'échappement est à l'arrière
     return sig * level
 
 
 def track(n: int, rate: int, rng=None) -> np.ndarray:
-    """Une scène de piste de n échantillons : de zéro à trois voitures proches, parfois une au loin."""
+    """Une scène de piste de n échantillons : des passages au hasard (voitures seules ou en groupe), parfois une au loin."""
     rng = rng or np.random.default_rng()
     dur = n / rate
-    # la radio coupe au-dessus de 3,4 kHz : on synthétise à mi-fréquence, deux fois plus vite
-    full_n, sub = n, (2 if rate >= 16000 else 1)
+    # la radio coupe au-dessus de 3,4 kHz : on synthétise vers 8 kHz (3 fois moins de calcul en 24 kHz)
+    full_n, sub = n, max(1, rate // 8000)
     n, rate = n // sub + 2, rate // sub
     out = np.zeros(n)
 
-    roll = rng.random()
-    count = 0 if roll < 0.25 else 1 if roll < 0.7 else 2 if roll < 0.92 else 3
-    t0 = rng.uniform(-0.3, dur + 0.3)
-    for i in range(count):
-        if i:
-            # en file (dans le DRS de la précédente) ou plus tard, seule
-            t0 = t0 + rng.uniform(0.25, 0.8) if rng.random() < 0.5 else rng.uniform(-0.3, dur + 0.3)
-        out += _car(rng, n, rate, t0)
+    # Une suite de passages au hasard : une voiture seule puis tout un groupe, l'inverse, plusieurs, ou rien.
+    # Chaque message tire sa propre densité de trafic : certains sont calmes, d'autres très chargés.
+    traffic = rng.choice([0.0, rng.uniform(0.1, 0.3), rng.uniform(0.3, 0.7)], p=[0.2, 0.45, 0.35])
+    cars = 0
+    for _ in range(rng.poisson(traffic * (dur + 0.6))):
+        if cars >= 8:                                                 # au-delà, ce n'est plus qu'un brouhaha (et du calcul)
+            break
+        t0 = rng.uniform(-0.3, dur + 0.3)
+        if rng.random() < 0.6:
+            out += _car(rng, n, rate, t0)                             # une voiture seule
+            cars += 1
+        else:
+            # un groupe : côte à côte en pleine bagarre, ou en file dans le DRS
+            for _ in range(rng.integers(2, 6)):
+                out += 0.8 * _car(rng, n, rate, t0)
+                t0 += rng.uniform(0.03, 0.5)
+                cars += 1
     if rng.random() < 0.35:
         out += _car(rng, n, rate, rng.uniform(0, dur), far=True)
+
+    # un peloton reste un bruit de fond : on arrondit les crêtes au lieu de les additionner
+    out = 1.6 * np.tanh(out / 1.6)
 
     fade = min(n // 2, int(rate * 0.05))
     if fade:

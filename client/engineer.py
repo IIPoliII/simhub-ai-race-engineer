@@ -56,20 +56,22 @@ class Plugin:
         except OSError:
             return ""
 
-    def get(self, path: str, **params):
-        r = self.http.get(path, params=params, headers={"Authorization": f"Bearer {self.token}"})
+    def get(self, path: str, timeout: float | None = None, **params):
+        t = httpx.USE_CLIENT_DEFAULT if timeout is None else timeout
+        r = self.http.get(path, params=params, headers={"Authorization": f"Bearer {self.token}"}, timeout=t)
         if r.status_code == 401:
             # SimHub a redémarré : nouveau jeton
             self.token = self._read_token()
-            r = self.http.get(path, params=params, headers={"Authorization": f"Bearer {self.token}"})
+            r = self.http.get(path, params=params, headers={"Authorization": f"Bearer {self.token}"}, timeout=t)
         r.raise_for_status()
         return r.json()
 
     def config(self) -> dict:
         return self.get("/config")
 
-    def poll(self, since: int) -> dict:
-        return self.get("/poll", since=since)
+    def poll(self, since: int, ptt: bool, rev: int) -> dict:
+        # Attente longue : le plugin ne répond que quand le bouton, une annonce ou les réglages changent (au plus 1 s)
+        return self.get("/poll", timeout=3.0, since=since, wait=1, ptt=int(ptt), rev=rev)
 
     def snapshot(self) -> dict | None:
         try:
@@ -205,10 +207,11 @@ def run(plugin: Plugin, managed: bool):
     last_id = None
     recording, started = False, 0.0
     last_ok = time.time()
+    ptt_seen = False
 
     while True:
         try:
-            p = plugin.poll(-1 if last_id is None else last_id)
+            p = plugin.poll(-1 if last_id is None else last_id, ptt_seen, rev)
             last_ok = time.time()
         except httpx.HTTPError:
             if recording:
@@ -236,7 +239,7 @@ def run(plugin: Plugin, managed: bool):
             if event.get("age_ms", 0) < MAX_EVENT_AGE_MS:
                 jobs.put(("say", event["text"]))
 
-        down = p["ptt"]
+        down = ptt_seen = p["ptt"]
         if down and not recording:
             audio.stop()          # coupe l'ingé s'il parlait encore
             audio.beep(1400)
@@ -252,7 +255,8 @@ def run(plugin: Plugin, managed: bool):
             if time.time() - started >= MIN_RECORDING_S:
                 jobs.put(("audio", samples))
 
-        time.sleep(POLL_S)
+        if not p.get("wait"):
+            time.sleep(POLL_S)  # plugin d'avant l'attente longue : il répond tout de suite
 
 
 def prepare():
@@ -264,6 +268,15 @@ def prepare():
         print(f"Téléchargement de la reconnaissance vocale ({size})...", flush=True)
         download_model(size)
     print("Modèles prêts.", flush=True)
+
+
+def lower_priority():
+    """Lancé avec SimHub : priorité « inférieure à la normale », le jeu passe toujours avant.
+    Le son reste fluide : les fils audio gardent leur propre priorité haute."""
+    if sys.platform == "win32":
+        import ctypes
+        BELOW_NORMAL_PRIORITY_CLASS = 0x4000
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.windll.kernel32.GetCurrentProcess(), BELOW_NORMAL_PRIORITY_CLASS)
 
 
 def main():
@@ -281,6 +294,9 @@ def main():
     if args.prepare:
         prepare()
         return
+
+    if args.managed:
+        lower_priority()
 
     plugin = Plugin()
     if args.say or args.ask:

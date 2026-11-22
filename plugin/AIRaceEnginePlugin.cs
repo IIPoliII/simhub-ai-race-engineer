@@ -64,7 +64,13 @@ namespace AIRaceEngineer
 
         // Télémétrie
         private DateTime _lastSnapshot = DateTime.MinValue;
-        private volatile string _json = Offline();
+        // Dernière télémétrie, sérialisée seulement quand le client la demande (pas 4 fois par seconde pour rien)
+        private static readonly object OfflineSnapshot = new { game_running = false };
+        private volatile object _snapshot = OfflineSnapshot;
+
+        // Attente longue de /poll : le client est réveillé dès que le bouton, une annonce ou les réglages changent
+        private const int LongPollMs = 1000;
+        private readonly object _pollSignal = new object();
 
         // Annonces à prononcer par le client
         private readonly object _eventLock = new object();
@@ -89,8 +95,9 @@ namespace AIRaceEngineer
             pluginManager.AddAction(PushToTalkAction, GetType(), (pm, a) =>
             {
                 _ptt = true;
+                Signal();
                 if (!Settings.PttTested) { Settings.PttTested = true; SettingsChanged(); }
-            }, (pm, a) => _ptt = false);
+            }, (pm, a) => { _ptt = false; Signal(); });
 
             _server = new SnapshotServer(Port, Route);
             try
@@ -107,6 +114,7 @@ namespace AIRaceEngineer
 
             // Lance le client vocal, et le relance s'il s'arrête (sauf s'il plante en boucle)
             _watchdog = new System.Threading.Timer(_ => Watchdog(), null, 0, 5000);
+            Updater.CheckStaged();
             Updater.InstallFinished += OfferRestart;
             Updater.CheckAsync(); // en arrière-plan, n'installe rien sans clic
         }
@@ -114,8 +122,15 @@ namespace AIRaceEngineer
         public void End(PluginManager pluginManager)
         {
             _watchdog?.Dispose();
+            Signal();
             Client.Stop();
             _server?.Stop();
+            // Mise à jour préparée et SimHub fermé sans passer par « Redémarrer » : on la copie quand même
+            if (!_exitScriptLaunched && System.IO.File.Exists(Updater.StagedDll))
+            {
+                var current = System.Diagnostics.Process.GetCurrentProcess();
+                LaunchHidden(Updater.ExitScript(current.Id, current.MainModule.FileName, restart: false));
+            }
         }
 
         private void Watchdog()
@@ -142,23 +157,29 @@ namespace AIRaceEngineer
             app?.Dispatcher.BeginInvoke(new Action(() =>
             {
                 var answer = System.Windows.MessageBox.Show(app.MainWindow,
-                    $"AI Race Engineer {Updater.Latest} est installé.\n\nRedémarrer SimHub maintenant pour l'activer ?",
+                    Updater.Staged
+                        ? $"AI Race Engineer {Updater.Latest} est prêt.\n\nRedémarrer SimHub maintenant pour l'installer ? Sinon, il s'installera à la prochaine fermeture de SimHub."
+                        : $"AI Race Engineer {Updater.Latest} est installé.\n\nRedémarrer SimHub maintenant pour l'activer ?",
                     "AI Race Engineer : mise à jour installée",
                     System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
                 if (answer == System.Windows.MessageBoxResult.Yes) RestartSimHub();
             }));
         }
 
-        /// <summary>Ferme SimHub et le relance dès qu'il est fermé (petit script PowerShell caché).</summary>
+        private static bool _exitScriptLaunched;
+
+        /// <summary>Ferme SimHub et le relance dès qu'il est fermé, en installant au passage une mise à jour préparée.</summary>
         public static void RestartSimHub()
         {
             var current = System.Diagnostics.Process.GetCurrentProcess();
-            var exe = current.MainModule.FileName;
-            string Q(string v) => "'" + v.Replace("'", "''") + "'";
-            var script =
-                $"$p = Get-Process -Id {current.Id} -ErrorAction SilentlyContinue; " +
-                "if ($p) { $p.WaitForExit(120000) | Out-Null }; Start-Sleep -Seconds 1; " +
-                $"Start-Process -FilePath {Q(exe)} -WorkingDirectory {Q(System.IO.Path.GetDirectoryName(exe))}";
+            LaunchHidden(Updater.ExitScript(current.Id, current.MainModule.FileName, restart: true));
+            System.Windows.Application.Current.Shutdown();
+        }
+
+        /// <summary>Petit script PowerShell caché, qui survit à la fermeture de SimHub.</summary>
+        private static void LaunchHidden(string script)
+        {
+            _exitScriptLaunched = true;
             var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("powershell.exe",
                 "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand " + encoded)
@@ -166,7 +187,6 @@ namespace AIRaceEngineer
                 UseShellExecute = false,
                 CreateNoWindow = true,
             });
-            System.Windows.Application.Current.Shutdown();
         }
 
         /// <summary>À appeler après chaque modification des réglages dans le panneau.</summary>
@@ -184,6 +204,13 @@ namespace AIRaceEngineer
                 _configRev++;
                 _configJson = JsonConvert.SerializeObject(Settings.ToClientConfig(_configRev));
             }
+            Signal();
+        }
+
+        /// <summary>Réveille les /poll en attente. Jamais appelé en tenant _configLock ou _eventLock (ordre des verrous).</summary>
+        private void Signal()
+        {
+            lock (_pollSignal) System.Threading.Monitor.PulseAll(_pollSignal);
         }
 
         /// <summary>Met une phrase dans la file du client vocal.</summary>
@@ -194,6 +221,7 @@ namespace AIRaceEngineer
                 _events.Add((++_lastEventId, DateTime.UtcNow, text));
                 if (_events.Count > 20) _events.RemoveAt(0);
             }
+            Signal();
         }
 
         // ---------- Serveur local ----------
@@ -229,14 +257,14 @@ namespace AIRaceEngineer
             switch (path)
             {
                 case "/snapshot":
-                    return _json;
+                    return JsonConvert.SerializeObject(_snapshot, Formatting.None);
                 case "/config":
                     if (!Authorized(auth)) throw new UnauthorizedAccessException();
                     lock (_configLock) return _configJson;
                 case "/poll":
                     if (!Authorized(auth)) throw new UnauthorizedAccessException();
                     _lastClientPoll = DateTime.UtcNow;
-                    return Poll(query.TryGetValue("since", out var s) && int.TryParse(s, out var since) ? since : -1);
+                    return Poll(Int(query, "since", -1), query.ContainsKey("wait"), Int(query, "ptt", 0) == 1, Int(query, "rev", -1));
                 case "/client-status":
                     if (!Authorized(auth)) throw new UnauthorizedAccessException();
                     if (query.TryGetValue("m", out var m)) ClientStatus = m.Length > 200 ? m.Substring(0, 200) : m;
@@ -246,8 +274,34 @@ namespace AIRaceEngineer
             }
         }
 
-        private string Poll(int since)
+        private static int Int(Dictionary<string, string> q, string key, int fallback) =>
+            q.TryGetValue(key, out var v) && int.TryParse(v, out var i) ? i : fallback;
+
+        /// <summary>Quelque chose a changé depuis ce que le client connaît (bouton, réglages, nouvelle annonce) ?</summary>
+        private bool PollChanged(int since, bool knownPtt, int knownRev)
         {
+            if (_ptt != knownPtt) return true;
+            lock (_configLock) if (_configRev != knownRev) return true;
+            lock (_eventLock) return since >= 0 && _lastEventId > since;
+        }
+
+        private string Poll(int since, bool wait, bool knownPtt, int knownRev)
+        {
+            if (wait)
+            {
+                // Au lieu de 30 requêtes par seconde, une seule qui attend (au plus 1 s) qu'il se passe quelque chose
+                var until = DateTime.UtcNow.AddMilliseconds(LongPollMs);
+                lock (_pollSignal)
+                {
+                    while (!PollChanged(since, knownPtt, knownRev))
+                    {
+                        var left = until - DateTime.UtcNow;
+                        if (left <= TimeSpan.Zero) break;
+                        System.Threading.Monitor.Wait(_pollSignal, left);
+                    }
+                }
+            }
+
             int rev;
             lock (_configLock) rev = _configRev;
             lock (_eventLock)
@@ -258,7 +312,7 @@ namespace AIRaceEngineer
                     : _events.Where(e => e.Id > since)
                              .Select(e => (object)new { id = e.Id, text = e.Text, age_ms = (int)(now - e.At).TotalMilliseconds })
                              .ToArray();
-                return JsonConvert.SerializeObject(new { ptt = _ptt, rev, last_id = _lastEventId, events });
+                return JsonConvert.SerializeObject(new { ptt = _ptt, rev, last_id = _lastEventId, events, wait = true });
             }
         }
 
@@ -268,7 +322,7 @@ namespace AIRaceEngineer
         {
             if (!data.GameRunning || data.NewData == null)
             {
-                _json = Offline();
+                _snapshot = OfflineSnapshot;
                 Status = "En attente du jeu";
                 GameName = null;
                 return;
@@ -285,7 +339,7 @@ namespace AIRaceEngineer
             {
                 var n = Neighbours.From(d);
                 _callouts.Update(d, n.MyPos, n.Ahead, n.Behind);
-                _json = JsonConvert.SerializeObject(Build(data, d, n), Formatting.None);
+                _snapshot = Build(data, d, n);
                 Status = $"Télémétrie OK : {data.GameName}, {d.TrackName}, P{n.MyPos}";
                 GameName = data.GameName;
                 GameDetail = string.Join(" · ", new[] { d.TrackName, d.SessionTypeName, n.MyPos > 0 ? "P" + n.MyPos : null }
@@ -296,8 +350,6 @@ namespace AIRaceEngineer
                 SimHub.Logging.Current.Warn("[AI Race Engineer] snapshot: " + ex.Message);
             }
         }
-
-        private static string Offline() => "{\"game_running\":false}";
 
         private void TrackLaps(GameData data, StatusDataBase d)
         {

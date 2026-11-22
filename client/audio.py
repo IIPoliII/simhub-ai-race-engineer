@@ -64,12 +64,13 @@ def radio_fx(x: np.ndarray, rate: int, track=False) -> np.ndarray:
         x = np.concatenate([pad, x, pad])
         x = x + TRACK_LEVEL * ambience.track(len(x), rate) * ambience.duck(x, rate)
     n = len(x)
-    spectrum = np.fft.rfft(x)
-    freqs = np.fft.rfftfreq(n, 1 / rate)
+    m = 1 << (n - 1).bit_length()  # FFT en puissance de 2 : bien plus rapide qu'une longueur quelconque
+    spectrum = np.fft.rfft(x, m)
+    freqs = np.fft.rfftfreq(m, 1 / rate)
     # fenêtre douce plutôt qu'un coupe-net, pour éviter le son "métallique"
     low = 1 / (1 + (300 / np.maximum(freqs, 1)) ** 4)
     high = 1 / (1 + (freqs / 3400) ** 4)
-    y = np.fft.irfft(spectrum * low * high, n)
+    y = np.fft.irfft(spectrum * low * high, m)[:n]
 
     y = y / (np.max(np.abs(y)) + 1e-9)
     y = np.tanh(y * 2.2) / np.tanh(2.2)

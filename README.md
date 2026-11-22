@@ -35,8 +35,9 @@ L'installateur :
 1. trouve SimHub ;
 2. installe le client vocal dans `%LOCALAPPDATA%\AIRaceEngineer`, avec [uv](https://docs.astral.sh/uv/) et Python
    si besoin, puis télécharge la voix et la reconnaissance vocale (~1 Go la première fois) ;
-3. attend que SimHub soit fermé et copie le plugin. Windows demande les droits admin, car SimHub est dans
-   Program Files.
+3. attend que SimHub soit fermé et copie le plugin. En général sans droits admin : l'installateur de SimHub laisse
+   les utilisateurs écrire dans son dossier. Sinon Windows demande l'autorisation, une seule fois : l'installateur
+   donne alors à ton compte le droit de réécrire ce seul fichier (`AIRaceEngineer.dll`), pour les mises à jour.
 
 Rien à compiler, rien à configurer en ligne de commande.
 
@@ -76,8 +77,18 @@ Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il 
 « Client vocal » affiche la cause, et le bouton « Journal » ouvre son journal.
 
 **Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, un bandeau apparaît en haut
-de sa page : clique sur « Installer » et accepte la demande d'autorisation. Le client vocal est mis à jour
-en même temps, puis le plugin propose de redémarrer SimHub tout seul.
+de sa page : clique sur « Installer ». La nouvelle version est préparée dans ton profil, et elle remplace l'ancienne
+quand SimHub se ferme (le plugin propose de le redémarrer tout de suite). Pas de demande d'autorisation Windows
+(sauf, une seule fois, si ton compte n'a pas le droit d'écrire dans le dossier de SimHub). Le client vocal
+est mis à jour en même temps.
+
+**Performances** : le plugin est fait pour laisser la machine au jeu.
+- Le client vocal tourne en priorité « inférieure à la normale », et la reconnaissance vocale utilise au plus
+  la moitié des cœurs (4 maximum).
+- Le client et SimHub ne s'échangent presque rien au repos : une requête qui attend qu'il se passe quelque chose
+  (bouton, annonce), au lieu d'interroger en boucle.
+- La télémétrie n'est mise en forme que quand l'ingé en a besoin, et les bruits de piste coûtent quelques
+  dizaines de millisecondes par message.
 
 ## Latence
 

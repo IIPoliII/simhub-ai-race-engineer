@@ -16,10 +16,13 @@ HINTS = {
 class Transcriber:
     def __init__(self, cfg: dict, language: str):
         self.language = language
+        # Pas plus de la moitié des cœurs (4 au maximum) : le reste est pour le jeu
+        threads = max(1, min(4, (os.cpu_count() or 2) // 2))
         self.model = WhisperModel(
             cfg.get("model", "small"),
             device=cfg.get("device", "cpu"),
             compute_type=cfg.get("compute_type", "int8"),
+            cpu_threads=threads,
         )
         # Première passe à vide : la vraie première question n'attend pas le chargement
         self.model.transcribe(np.zeros(16000, dtype=np.float32), language=language, vad_filter=False)

@@ -68,13 +68,17 @@
     }
 
     # 5. Copier (Program Files demande les droits admin)
+    #    En admin, on donne aussi à l'utilisateur le droit d'écrire sur ce seul fichier :
+    #    les mises à jour depuis SimHub se feront ensuite sans demande d'autorisation.
     $target = Join-Path $simhub $dllName
     $copy = "Remove-Item '$target.old' -Force -ErrorAction SilentlyContinue; Copy-Item '$tmp' '$target' -Force"
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     try {
         Invoke-Expression $copy
     } catch {
         Write-Host "Autorisation administrateur demandée pour écrire dans $simhub..."
-        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("`$ErrorActionPreference='Stop'; $copy"))
+        $grant = "& icacls.exe '$target' /grant '*${sid}:(M)' | Out-Null"
+        $encoded = [Convert]::ToBase64String([Text.Encoding]::Unicode.GetBytes("`$ErrorActionPreference='Stop'; $copy; $grant"))
         $p = Start-Process powershell -Verb RunAs -Wait -PassThru -WindowStyle Hidden -ArgumentList "-NoProfile -NonInteractive -EncodedCommand $encoded"
         if ($p.ExitCode -ne 0) { throw "La copie a échoué." }
     }

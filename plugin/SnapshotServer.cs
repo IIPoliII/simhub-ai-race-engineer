@@ -49,13 +49,9 @@ namespace AIRaceEngineer
             {
                 try
                 {
-                    using (var client = _listener.AcceptTcpClient())
-                    {
-                        client.ReceiveTimeout = 1000;
-                        client.SendTimeout = 1000;
-                        client.NoDelay = true;
-                        Handle(client.GetStream());
-                    }
+                    var client = _listener.AcceptTcpClient();
+                    // Chaque requête à part : un /poll qui attend ne bloque pas les autres
+                    ThreadPool.QueueUserWorkItem(_ => Serve(client));
                 }
                 catch (SocketException) when (!_running) { }
                 catch (ObjectDisposedException) when (!_running) { }
@@ -63,6 +59,24 @@ namespace AIRaceEngineer
                 {
                     if (_running) SimHub.Logging.Current.Warn("[AI Race Engineer] http: " + ex.Message);
                 }
+            }
+        }
+
+        private void Serve(TcpClient client)
+        {
+            try
+            {
+                using (client)
+                {
+                    client.ReceiveTimeout = 1000;
+                    client.SendTimeout = 1000;
+                    client.NoDelay = true;
+                    Handle(client.GetStream());
+                }
+            }
+            catch (Exception ex)
+            {
+                if (_running) SimHub.Logging.Current.Warn("[AI Race Engineer] http: " + ex.Message);
             }
         }
 

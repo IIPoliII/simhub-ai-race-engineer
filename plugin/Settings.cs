@@ -31,11 +31,12 @@ namespace AIRaceEngineer
             new ProviderInfo
             {
                 Id = "infomaniak", Name = "Infomaniak", Tagline = "Suisse · 1M de crédits offerts",
-                Models = new[] { "mistral3", "mistral24b", "qwen3" },
+                Models = new[] { "mistral3", "mistralai/Mistral-Small-4-119B-2603", "google/gemma-4-31B-it" },
                 AccountLabel = "Product ID", AccountHelp = "Manager Infomaniak → AI Tools : le numéro du produit.",
                 KeyHelp = "Token API avec le scope « ai-tools ».",
                 KeyHelpUrl = "https://www.infomaniak.com/fr/hebergement/ai-tools",
-                BaseUrl = p => $"https://api.infomaniak.com/1/ai/{p.AccountId.Trim()}/openai",
+                // API v2 : accepte tout le catalogue (la v1 ne connaît que mistral3, mistral24b et qwen3)
+                BaseUrl = p => $"https://api.infomaniak.com/2/ai/{p.AccountId.Trim()}/openai/v1",
             },
             new ProviderInfo
             {

@@ -25,6 +25,9 @@ namespace AIRaceEngineer
         private EngineerSettings S => _plugin.Settings;
         private bool Fr => S.Language == "fr";
         private readonly LlmTester _tester = new LlmTester();
+        private readonly ModelCatalog _catalog = new ModelCatalog();
+        private int _catalogRev = -1;
+        private TextBlock _modelHelp;
         private readonly DispatcherTimer _timer;
 
         private Border _banner, _aiCard, _voiceCard, _calloutsCard, _pttCard, _clientCard, _testBox;
@@ -375,10 +378,20 @@ namespace AIRaceEngineer
             var p = S.Current();
             _providerHint.Text = info.Tagline;
 
+            // La liste des modèles se recharge quand on quitte un champ d'identification
+            RoutedEventHandler reload = (s, e) => _catalog.Refresh(info, p);
             if (info.Id == "custom")
-                _providerFields.Children.Add(Field("URL de l'API", Text(info.BaseUrl(p), v => { p.BaseUrl = v; Changed(); }), "Ollama : http://localhost:11434/v1"));
+            {
+                var url = Text(info.BaseUrl(p), v => { p.BaseUrl = v; Changed(); });
+                url.LostFocus += reload;
+                _providerFields.Children.Add(Field("URL de l'API", url, "Ollama : http://localhost:11434/v1"));
+            }
             if (info.AccountLabel != null)
-                _providerFields.Children.Add(Field(info.AccountLabel, Text(p.AccountId, v => { p.AccountId = v; Changed(); }), info.AccountHelp.TrimEnd('.')));
+            {
+                var account = Text(p.AccountId, v => { p.AccountId = v; Changed(); });
+                account.LostFocus += reload;
+                _providerFields.Children.Add(Field(info.AccountLabel, account, info.AccountHelp.TrimEnd('.')));
+            }
 
             var keyHelp = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap };
             keyHelp.Inlines.Add(new Run(info.KeyHelp.TrimEnd('.') + ", enregistrée chiffrée sur ce PC"));
@@ -389,18 +402,60 @@ namespace AIRaceEngineer
                 keyHelp.Inlines.Add(new Run(" · "));
                 keyHelp.Inlines.Add(link);
             }
-            _providerFields.Children.Add(Field(info.NeedsKey ? "Clé API" : "Clé (optionnelle)", Secret(p.ApiKey, v => { p.ApiKey = v; Changed(); }), keyHelp));
+            var secret = Secret(p.ApiKey, v => { p.ApiKey = v; Changed(); });
+            secret.LostFocus += reload;
+            _providerFields.Children.Add(Field(info.NeedsKey ? "Clé API" : "Clé (optionnelle)", secret, keyHelp));
 
             _modelCombo = new ComboBox { IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch, FontFamily = Theme.Mono };
-            foreach (var m in info.Models) _modelCombo.Items.Add(m);
-            _modelCombo.Text = S.ModelOrDefault();
+            _modelCombo.DropDownOpened += (s, e) => _catalog.Refresh(info, p);
+            _catalogRev = -1; // remplit la liste au prochain rafraîchissement
+            FillModels();
             _modelCombo.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((s, e) =>
             {
                 if (p.Model == _modelCombo.Text) return;
                 p.Model = _modelCombo.Text;
                 Changed();
             }));
-            _providerFields.Children.Add(Field("Modèle", _modelCombo, "Un petit modèle rapide suffit"));
+            _modelHelp = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap };
+            _providerFields.Children.Add(Field("Modèle", _modelCombo, _modelHelp));
+            _catalog.Refresh(info, p);
+        }
+
+        /// <summary>Liste « Modèle » : les modèles récupérés chez le fournisseur, sinon les conseillés.</summary>
+        private void FillModels()
+        {
+            var info = ProviderInfo.Get(S.Provider);
+            var p = S.Current();
+            bool fresh = _catalog.Key == ModelCatalog.KeyFor(info, p);
+            var models = fresh && _catalog.Models.Length > 0 ? _catalog.Models : info.Models;
+
+            var text = S.ModelOrDefault();
+            _modelCombo.Items.Clear();
+            foreach (var m in models) _modelCombo.Items.Add(m);
+            _modelCombo.Text = text;
+        }
+
+        private void RefreshModels()
+        {
+            if (_modelHelp == null) return;
+            var info = ProviderInfo.Get(S.Provider);
+            var p = S.Current();
+            bool fresh = _catalog.Key == ModelCatalog.KeyFor(info, p);
+            string extra =
+                _catalog.Busy ? " · récupération de la liste des modèles"
+                : !fresh ? ""
+                : _catalog.Error != null ? " · " + _catalog.Error
+                : _catalog.Models.Length > 0 ? $" · {_catalog.Models.Length} disponibles"
+                : "";
+            var help = "Un petit modèle rapide suffit" + extra;
+            if (_modelHelp.Text != help) _modelHelp.Text = help;
+
+            if (_catalog.Revision != _catalogRev && !_catalog.Busy)
+            {
+                if (_modelCombo.IsDropDownOpen) return; // on attend que la liste soit refermée
+                _catalogRev = _catalog.Revision;
+                FillModels();
+            }
         }
 
         private void RefreshTest()
@@ -653,6 +708,7 @@ namespace AIRaceEngineer
                 RefreshStrip();
                 RefreshPtt();
                 RefreshTest();
+                RefreshModels();
                 var state = (_plugin.Updater.State ?? "").TrimEnd('.');
                 _updateState.Text = state;
                 _updateState.Visibility = state.Length == 0 ? Visibility.Collapsed : Visibility.Visible;

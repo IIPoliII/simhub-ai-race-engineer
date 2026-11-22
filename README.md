@@ -54,10 +54,11 @@ le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire :
 
   Le bouton **Écouter** fait entendre la voix choisie. Effet radio et reconnaissance rapide ou précise en option.
 - **Intelligence artificielle** : Infomaniak, Cloudflare, OpenAI, Claude, ou n'importe quelle API compatible
-  OpenAI (Ollama...). Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API refuse le modèle,
-  la page propose ceux qu'elle accepte en un clic.
-  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistral3`
-    (aussi `mistral24b` et `qwen3`).
+  OpenAI (Ollama...). Une fois la clé collée, la liste « Modèle » se remplit avec les modèles disponibles chez
+  le fournisseur, les conseillés en tête. Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API
+  refuse le modèle, la page propose ceux qu'elle accepte en un clic.
+  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistral3`.
+    Le plugin utilise l'API v2 d'Infomaniak, qui donne accès à tout leur catalogue (Mistral Small 4, Gemma 4...).
   - Cloudflare : un token API Workers AI et ton Account ID.
 - **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière,
   places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce montre un exemple de phrase.
@@ -112,6 +113,7 @@ plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
   Updater.cs              mises à jour depuis les releases GitHub
   LlmTester.cs            bouton « Tester la connexion »
+  ModelCatalog.cs         liste des modèles disponibles chez le fournisseur
 client/                 Client vocal (Python)
   engineer.py             boucle principale (dialogue avec le plugin)
   stt.py / llm.py / tts.py / audio.py

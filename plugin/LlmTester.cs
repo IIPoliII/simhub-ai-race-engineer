@@ -69,7 +69,10 @@ namespace AIRaceEngineer
                     var json = wc.UploadString(baseUrl.TrimEnd('/') + "/chat/completions", body);
                     var ms = (int)(DateTime.UtcNow - started).TotalMilliseconds;
                     var answer = ((string)JObject.Parse(json).SelectToken("choices[0].message.content") ?? "").Trim();
-                    Publish(true, $"Connexion OK · {model} · réponse en {ms} ms" + (answer.Length > 0 && answer.Length < 40 ? $" : « {answer} »" : ""), null);
+                    if (answer.Length == 0)
+                        Publish(false, $"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler, trop lent pour la radio. Choisis-en un plus direct.", null);
+                    else
+                        Publish(true, $"Connexion OK · {model} · réponse en {ms} ms" + (answer.Length < 40 ? $" : « {answer} »" : ""), null);
                 }
                 catch (WebException ex) when (ex.Response is HttpWebResponse r)
                 {
@@ -102,11 +105,19 @@ namespace AIRaceEngineer
         {
             try
             {
-                return JToken.Parse(body).SelectTokens("$..values").Concat(JToken.Parse(body).SelectTokens("$..allowed_values"))
+                var root = JToken.Parse(body);
+                var tokens = new System.Collections.Generic.List<JToken> { root };
+                // Infomaniak v2 : l'erreur d'origine est un JSON glissé dans error.message
+                foreach (var str in root.SelectTokens("$..message").Where(t => t.Type == JTokenType.String).Select(t => (string)t))
+                {
+                    int i = str.IndexOf('{');
+                    if (i >= 0) try { tokens.Add(JToken.Parse(str.Substring(i))); } catch { }
+                }
+                return tokens.SelectMany(t => t.SelectTokens("$..values").Concat(t.SelectTokens("$..allowed_values")))
                     .OfType<JArray>()
                     .SelectMany(a => a.Where(t => t.Type == JTokenType.String).Select(t => (string)t))
                     .Where(v => !string.IsNullOrWhiteSpace(v) && v.Length < 80)
-                    .Distinct().Take(12).ToArray();
+                    .Distinct().Take(16).ToArray();
             }
             catch { return new string[0]; }
         }

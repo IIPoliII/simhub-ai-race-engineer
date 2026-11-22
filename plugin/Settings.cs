@@ -89,6 +89,20 @@ namespace AIRaceEngineer
             new VoiceInfo { Language = "en", Id = "am_adam", Label = "Adam (américain, homme)" },
             new VoiceInfo { Language = "en", Id = "af_heart", Label = "Heart (américaine, femme)" },
         };
+
+        /// <summary>Voix neuronales Microsoft (en ligne, gratuites).</summary>
+        public static readonly VoiceInfo[] Neural =
+        {
+            new VoiceInfo { Language = "fr", Id = "fr-FR-HenriNeural", Label = "Henri (homme)" },
+            new VoiceInfo { Language = "fr", Id = "fr-FR-DeniseNeural", Label = "Denise (femme)" },
+            new VoiceInfo { Language = "fr", Id = "fr-FR-RemyMultilingualNeural", Label = "Rémy (homme, plus lent à générer)" },
+            new VoiceInfo { Language = "fr", Id = "fr-CA-AntoineNeural", Label = "Antoine (québécois, homme)" },
+            new VoiceInfo { Language = "en", Id = "en-GB-RyanNeural", Label = "Ryan (britannique, homme)" },
+            new VoiceInfo { Language = "en", Id = "en-GB-ThomasNeural", Label = "Thomas (britannique, homme)" },
+            new VoiceInfo { Language = "en", Id = "en-GB-SoniaNeural", Label = "Sonia (britannique, femme)" },
+            new VoiceInfo { Language = "en", Id = "en-US-AndrewNeural", Label = "Andrew (américain, homme)" },
+            new VoiceInfo { Language = "en", Id = "en-AU-WilliamNeural", Label = "William (australien, homme)" },
+        };
     }
 
     public class EngineerSettings
@@ -100,7 +114,10 @@ namespace AIRaceEngineer
         public Dictionary<string, ProviderSettings> Providers { get; set; } = new Dictionary<string, ProviderSettings>();
 
         // Voix
-        public string TtsEngine { get; set; } = "kokoro"; // kokoro | elevenlabs
+        public string TtsEngine { get; set; } = "neural"; // neural | kokoro | elevenlabs
+        public string NeuralVoiceFr { get; set; } = "fr-FR-HenriNeural";
+        public string NeuralVoiceEn { get; set; } = "en-GB-RyanNeural";
+        public int SettingsVersion { get; set; } // absent des anciens fichiers = 0
         public string VoiceFr { get; set; } = "ff_siwis";
         public string VoiceEn { get; set; } = "bm_george";
         public double VoiceSpeed { get; set; } = 1.1;
@@ -129,6 +146,7 @@ namespace AIRaceEngineer
         }
 
         [JsonIgnore] public string Voice => Language == "fr" ? VoiceFr : VoiceEn;
+        [JsonIgnore] public string NeuralVoice => Language == "fr" ? NeuralVoiceFr : NeuralVoiceEn;
 
         /// <summary>Clé (et identifiant de compte) renseignés pour le fournisseur choisi.</summary>
         [JsonIgnore]
@@ -170,7 +188,7 @@ namespace AIRaceEngineer
             {
                 SimHub.Logging.Current.Warn("[AI Race Engineer] réglages illisibles, valeurs par défaut : " + ex.Message);
             }
-            return new EngineerSettings();
+            return new EngineerSettings { SettingsVersion = 2 };
         }
 
         public void Save()
@@ -185,6 +203,9 @@ namespace AIRaceEngineer
         {
             // 0.2.0 proposait un nom de modèle Infomaniak refusé par l'API
             if (Providers.TryGetValue("infomaniak", out var inf) && inf.Model == "Ministral-3-14B") inf.Model = "mistral3";
+            // 0.4.0 : la voix française de Kokoro comprend mal l'anglais de course, les voix neuronales deviennent la voix par défaut
+            if (SettingsVersion < 2 && TtsEngine == "kokoro") TtsEngine = "neural";
+            SettingsVersion = 2;
         }
 
         private void TransformSecrets(Func<string, string> f)
@@ -231,6 +252,7 @@ namespace AIRaceEngineer
                 {
                     engine = TtsEngine,
                     kokoro_voice = Voice,
+                    neural_voice = NeuralVoice,
                     kokoro_speed = VoiceSpeed,
                     radio_effect = RadioEffect,
                 },

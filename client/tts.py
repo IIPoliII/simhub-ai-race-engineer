@@ -1,4 +1,7 @@
-"""Synthèse vocale : Kokoro (local, gratuit) ou ElevenLabs (cloud)."""
+"""Synthèse vocale : voix neuronales Microsoft (en ligne, gratuites), Kokoro (local) ou ElevenLabs (payant)."""
+import asyncio
+import io
+import re
 from pathlib import Path
 
 import httpx
@@ -81,14 +84,79 @@ class ElevenLabsVoice:
         return samples, self.RATE
 
 
+class NeuralVoice:
+    """Voix neuronales Microsoft (celles de la lecture à voix haute d'Edge) : gratuites, très naturelles, en ligne."""
+
+    def __init__(self, cfg: dict):
+        import edge_tts  # noqa: F401  (vérifie la dépendance tout de suite)
+        self.voice = cfg.get("neural_voice") or "fr-FR-HenriNeural"
+        pct = round((float(cfg.get("speed", 1.1)) - 1) * 100)
+        self.rate = f"{pct:+d}%"
+
+    async def _mp3(self, text: str) -> bytes:
+        import edge_tts
+        buf = bytearray()
+        async for chunk in edge_tts.Communicate(text, self.voice, rate=self.rate).stream():
+            if chunk["type"] == "audio":
+                buf += chunk["data"]
+        return bytes(buf)
+
+    def synth(self, text: str) -> tuple[np.ndarray, int]:
+        import soundfile as sf
+        data, rate = sf.read(io.BytesIO(asyncio.run(self._mp3(text))), dtype="float32")
+        if data.ndim > 1:
+            data = data.mean(axis=1)
+        return data, rate
+
+
+# Kokoro lit le français avec la phonétique française : on réécrit les mots d'anglais de course
+# (vérifié en repassant la voix dans Whisper : « box box » était compris « inbox box free »)
+FR_SPOKEN = [
+    (re.compile(r"\bbox\b", re.I), "boxe"),
+    (re.compile(r"\bpush\b", re.I), "pouche"),
+]
+
+
+def spoken_fr(text: str) -> str:
+    for pattern, repl in FR_SPOKEN:
+        text = pattern.sub(repl, text)
+    return text
+
+
 class Voice:
     def __init__(self, tts_cfg: dict, elevenlabs_cfg: dict):
-        engine = tts_cfg.get("engine", "kokoro")
-        self.engine = ElevenLabsVoice(elevenlabs_cfg) if engine == "elevenlabs" else KokoroVoice(tts_cfg)
+        engine = tts_cfg.get("engine", "neural")
         self.radio = bool(tts_cfg.get("radio_effect", True))
+        self._tts_cfg = tts_cfg
+        self._fallback = None
+        if engine == "elevenlabs":
+            self.engine = ElevenLabsVoice(elevenlabs_cfg)
+        elif engine == "neural":
+            self.engine = NeuralVoice({**tts_cfg, "speed": tts_cfg.get("kokoro_speed", 1.1)})
+        else:
+            self.engine = KokoroVoice(tts_cfg)
+
+    def _kokoro(self) -> KokoroVoice:
+        if self._fallback is None:
+            self._fallback = KokoroVoice(self._tts_cfg)
+        return self._fallback
+
+    def _synth(self, text: str) -> tuple[np.ndarray, int]:
+        if isinstance(self.engine, KokoroVoice):
+            if self.engine.lang == "fr-fr":
+                text = spoken_fr(text)
+            return self.engine.synth(text)
+        try:
+            return self.engine.synth(text)
+        except Exception as e:  # pas d'internet, service indisponible : la voix locale prend le relais
+            if not isinstance(self.engine, NeuralVoice):
+                raise
+            progress(f"Voix en ligne indisponible ({e}), voix locale utilisée.")
+            k = self._kokoro()
+            return k.synth(spoken_fr(text) if k.lang == "fr-fr" else text)
 
     def render(self, text: str) -> tuple[np.ndarray, int]:
-        samples, rate = self.engine.synth(text)
+        samples, rate = self._synth(text)
         if self.radio:
             samples = audio.radio_fx(samples, rate)
         return samples, rate

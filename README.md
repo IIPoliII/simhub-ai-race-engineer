@@ -8,7 +8,7 @@ ton temps au tour, tes écarts, tes changements de place et quand le carburant d
 ```
 Jeu ──► SimHub ──► plugin AI Race Engineer (réglages, annonces, push-to-talk, télémétrie JSON)
                                 │
-             client vocal (lancé tout seul) : micro ─► Whisper local ─► IA ─► voix Kokoro / ElevenLabs
+             client vocal (lancé tout seul) : micro ─► Whisper local ─► IA ─► voix neuronale / Kokoro / ElevenLabs
 ```
 
 ## Ce que ça coûte
@@ -16,7 +16,7 @@ Jeu ──► SimHub ──► plugin AI Race Engineer (réglages, annonces, pus
 | Brique | Par défaut | Coût |
 |---|---|---|
 | Reconnaissance vocale | Whisper local (faster-whisper) | gratuit |
-| Voix | Kokoro local, voix réaliste | gratuit |
+| Voix | voix neuronales Microsoft (en ligne), Kokoro en secours hors ligne | gratuit |
 | Annonces automatiques | générées par le plugin, sans IA | gratuit |
 | Questions (IA) | Infomaniak (1M de crédits offerts), Cloudflare (quota gratuit quotidien), OpenAI ou Claude | quelques centimes par course |
 | Option voix premium | ElevenLabs Flash | payant |
@@ -43,11 +43,16 @@ Rien à compiler, rien à configurer en ligne de commande.
 ## Réglages
 
 Relance SimHub et accepte d'activer **AI Race Engineer** : il apparaît dans le menu de gauche (sinon : Settings → Plugins).
-Tout se règle dans sa page. En haut, trois cartes montrent l'état du jeu, du client vocal et du push-to-talk,
-et une liste « Mise en route » indique ce qu'il reste à faire :
+Tout se règle dans sa page, rangée en colonnes pour tenir sur un écran. En haut, une bande d'état montre l'IA,
+le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire :
 
-- **Langue et voix** : français ou anglais (par défaut, la langue de ton Windows), voix selon la langue
-  (en anglais, `George` sonne très « ingé britannique »), ElevenLabs en option, effet radio, reconnaissance rapide ou précise.
+- **Langue et voix** : français ou anglais (par défaut, la langue de ton Windows), puis le moteur de voix :
+  - **En ligne** (par défaut) : voix neuronales Microsoft, gratuites et très naturelles (Henri, Denise, Rémy, Antoine
+    en français ; Ryan, Thomas, Sonia, Andrew, William en anglais). Sans internet, la voix hors ligne prend le relais ;
+  - **Hors ligne** : Kokoro, sur ton PC (en anglais, `George` sonne très « ingé britannique ») ;
+  - **ElevenLabs** : la plus réaliste, payante.
+
+  Le bouton **Écouter** fait entendre la voix choisie. Effet radio et reconnaissance rapide ou précise en option.
 - **Intelligence artificielle** : Infomaniak, Cloudflare, OpenAI, Claude, ou n'importe quelle API compatible
   OpenAI (Ollama...). Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API refuse le modèle,
   la page propose ceux qu'elle accepte en un clic.
@@ -62,11 +67,11 @@ et une liste « Mise en route » indique ce qu'il reste à faire :
 
 Les clés API sont enregistrées chiffrées (DPAPI Windows) dans `%LOCALAPPDATA%\AIRaceEngineer\settings.json`.
 
-Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il s'arrête. En cas de souci, la carte
+Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il s'arrête. En cas de souci, la case
 « Client vocal » affiche la cause, et le bouton « Journal » ouvre son journal.
 
 **Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, un bandeau apparaît en haut
-de sa page : clique sur « Installer la mise à jour » et accepte la demande d'autorisation. Le client vocal est mis à jour
+de sa page : clique sur « Installer » et accepte la demande d'autorisation. Le client vocal est mis à jour
 en même temps, puis le plugin propose de redémarrer SimHub tout seul.
 
 ## Latence
@@ -78,6 +83,7 @@ Mesurée sur CPU, sans GPU :
 | Reconnaissance précise (Whisper `small`, question de 3-4 s) | ~1,3 s |
 | Reconnaissance rapide (Whisper `base`) | ~0,4 s |
 | IA cloud (petit modèle) | ~0,5-1 s |
+| Voix en ligne (une phrase) | ~1-2 s |
 | Voix Kokoro (une phrase) | ~0,8 s |
 
 Les annonces automatiques n'ont pas besoin de reconnaissance vocale ni d'IA : elles partent directement.
@@ -101,7 +107,7 @@ plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   Callouts.cs             annonces automatiques (tour, écarts, positions, carburant)
   Settings.cs             réglages, fournisseurs d'IA, voix, config envoyée au client
   SettingsControl.cs      page du plugin dans SimHub
-  Theme.cs                thème de la page (boutons, interrupteurs, tuiles)
+  Theme.cs                thème de la page (couleurs, boutons, interrupteurs, segments)
   ClientRunner.cs         lance le client vocal en arrière-plan
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
   Updater.cs              mises à jour depuis les releases GitHub
@@ -138,3 +144,7 @@ Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj`, commite, pousse
 ## Licence
 
 MIT. SimHub est un logiciel de SHWotever : ce projet n'est pas affilié à SimHub et ne redistribue aucune de ses DLL.
+
+## Crédits
+
+La page du plugin a été retravaillée avec la méthode [unslop](https://github.com/heydamir/unslop) de Damir Sokolovsky (CC BY 4.0).

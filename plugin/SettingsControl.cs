@@ -38,7 +38,9 @@ namespace AIRaceEngineer
         private UniformGrid _strip;
         private Grid _columns;
         private int _columnCount;
-        private Button _clientButton;
+        private Button _clientButton, _radioButton, _listenButton;
+        private DateTime _sayClicked = DateTime.MinValue;
+        private bool _saySeen, _sayBusyLast;
         private string _clientButtonLabel;
         private Ellipse _pttLamp;
         private bool? _pttLast;
@@ -132,7 +134,7 @@ namespace AIRaceEngineer
             left.Inlines.Add(new Run("   v" + _plugin.Updater.Current) { FontSize = 12, FontFamily = Theme.Mono, Foreground = Theme.B("Muted") });
             grid.Children.Add(left);
 
-            var radio = Btn("Radio check", () => _plugin.Say(Fr ? "Radio check. Tu me reçois cinq sur cinq ?" : "Radio check, how do you read me?"), "Btn", GPlay);
+            var radio = _radioButton = Btn("Radio check", () => SayTest(Fr ? "Radio check. Tu me reçois cinq sur cinq ?" : "Radio check, how do you read me?"), "Btn", GPlay);
             radio.Margin = new Thickness(0);
             Grid.SetColumn(radio, 1);
             grid.Children.Add(radio);
@@ -242,19 +244,81 @@ namespace AIRaceEngineer
         {
             _strip = new UniformGrid { Columns = 4 };
             _aiCell = AddCell("Intelligence artificielle");
-            _aiCell.Actions.Children.Add(Btn("Configurer", () => _aiCard.BringIntoView(), "BtnGhost", null, small: true));
+            _aiCell.Actions.Children.Add(Btn("Configurer", () => Reveal(_aiCard), "BtnGhost", null, small: true));
             _clientCell = AddCell("Client vocal");
             _clientButton = Btn("Démarrer", () => _plugin.Client.Restart(), "BtnGhost", GRefresh, small: true);
             _clientCell.Actions.Children.Add(_clientButton);
             _clientCell.Actions.Children.Add(Btn("Journal", () => Open(ClientRunner.LogPath), "BtnGhost", GDoc, small: true));
             _pttCell = AddCell("Push-to-talk");
-            _pttCell.Actions.Children.Add(Btn("Comment l'associer", () => _pttCard.BringIntoView(), "BtnGhost", null, small: true));
+            _pttCell.Actions.Children.Add(Btn("Comment l'associer", () => Reveal(_pttCard), "BtnGhost", null, small: true));
             _gameCell = AddCell("Jeu");
             _gameCell.Actions.Children.Add(Btn("Télémétrie", () => Open(_plugin.Url), "BtnGhost", GLink, small: true));
 
             var card = Card(_strip, new Thickness(0));
             card.Margin = new Thickness(0, 16, 0, 0);
             return card;
+        }
+
+        /// <summary>
+        /// Amène une carte à l'écran et l'entoure un instant. SimHub place la page dans son propre défilement :
+        /// on cherche le premier ScrollViewer qui défile vraiment. Si la carte est déjà visible, le contour suffit à la montrer.
+        /// </summary>
+        private void Reveal(Border card)
+        {
+            for (DependencyObject d = VisualTreeHelper.GetParent(card); d != null; d = VisualTreeHelper.GetParent(d))
+            {
+                if (d is ScrollViewer sv && sv.ScrollableHeight > 0)
+                {
+                    var top = card.TransformToAncestor(sv).Transform(new Point(0, 0)).Y;
+                    if (top < 0 || top + Math.Min(card.ActualHeight, sv.ViewportHeight) > sv.ViewportHeight)
+                        sv.ScrollToVerticalOffset(Math.Max(0, sv.VerticalOffset + top - 16));
+                    break;
+                }
+            }
+            card.BorderBrush = Theme.B("AccentLine");
+            var timer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1.6) };
+            timer.Tick += (s, e) => { timer.Stop(); card.BorderBrush = Theme.B("Line"); };
+            timer.Start();
+        }
+
+        // ---------- Radio check / Écouter : une phrase à la fois ----------
+
+        private bool Speaking => _plugin.ClientConnected && (_plugin.ClientStatus ?? "").StartsWith("À la radio");
+
+        /// <summary>
+        /// Occupé du clic jusqu'à la fin de la phrase : le client passe « À la radio » puis « Prêt ».
+        /// Si le client ne répond pas (arrêté, ancienne version), on libère au bout de 8 s.
+        /// </summary>
+        private bool SayBusy
+        {
+            get
+            {
+                if (Speaking) { _saySeen = true; return true; }
+                var waited = (DateTime.UtcNow - _sayClicked).TotalSeconds;
+                return !_saySeen && waited < 8;
+            }
+        }
+
+        private void SayTest(string text)
+        {
+            if (SayBusy) return;
+            _plugin.Say(text);
+            _sayClicked = DateTime.UtcNow;
+            _saySeen = false;
+            RefreshSayButtons();
+        }
+
+        private void RefreshSayButtons()
+        {
+            bool busy = SayBusy;
+            if (busy == _sayBusyLast) return;
+            _sayBusyLast = busy;
+            if (_radioButton != null) _radioButton.IsEnabled = !busy;
+            if (_listenButton != null)
+            {
+                _listenButton.IsEnabled = !busy;
+                _listenButton.Content = BtnContent(busy ? "À la radio" : "Écouter", busy ? GSync : GPlay);
+            }
         }
 
         private Cell AddCell(string label)
@@ -299,6 +363,7 @@ namespace AIRaceEngineer
             if (_plugin.ClientConnected)
             {
                 if (status.StartsWith("Prêt")) _clientCell.Set("Connecté", "Prêt à répondre", Theme.B("Ok"));
+                else if (status.StartsWith("À la radio")) _clientCell.Set("Connecté", "À la radio", Theme.B("Ok"));
                 else if (status.StartsWith("Erreur") || status.StartsWith("Micro") || status.StartsWith("ElevenLabs") || status.StartsWith("Voix en ligne"))
                     _clientCell.Set("Connecté", status, Theme.B("Warn"));
                 else _clientCell.Set("Chargement", status, Theme.B("AccentLine"));
@@ -408,6 +473,8 @@ namespace AIRaceEngineer
 
             _modelCombo = new ComboBox { IsEditable = true, HorizontalAlignment = HorizontalAlignment.Stretch, FontFamily = Theme.Mono };
             _modelCombo.DropDownOpened += (s, e) => _catalog.Refresh(info, p);
+            _modelCombo.DropDownClosed += (s, e) => ShowModelStart();
+            _modelCombo.Loaded += (s, e) => ShowModelStart();
             _catalogRev = -1; // remplit la liste au prochain rafraîchissement
             FillModels();
             _modelCombo.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((s, e) =>
@@ -433,6 +500,20 @@ namespace AIRaceEngineer
             _modelCombo.Items.Clear();
             foreach (var m in models) _modelCombo.Items.Add(m);
             _modelCombo.Text = text;
+            ShowModelStart();
+        }
+
+        /// <summary>Les noms longs (« mistralai/... ») s'affichent depuis le début, pas coupés à gauche.</summary>
+        private void ShowModelStart()
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_modelCombo?.Template?.FindName("PART_EditableTextBox", _modelCombo) is TextBox box && !box.IsKeyboardFocused)
+                {
+                    box.CaretIndex = 0;
+                    box.ScrollToHome();
+                }
+            }), DispatcherPriority.Background);
         }
 
         private void RefreshModels()
@@ -562,10 +643,11 @@ namespace AIRaceEngineer
                 else { if (Fr) S.VoiceFr = v; else S.VoiceEn = v; }
                 Changed();
             }));
-            var listen = Btn("Écouter", () => _plugin.Say(Fr
+            var listen = _listenButton = Btn("Écouter", () => SayTest(Fr
                 ? "Box box, ce tour-ci. Tu ressors en P4, la voiture derrière est à deux secondes."
-                : "Box box, this lap. You'll rejoin in P4, the car behind is two seconds back."), "BtnGhost", GPlay);
+                : "Box box, this lap. You'll rejoin in P4, the car behind is two seconds back."), "Btn", GPlay);
             listen.Margin = new Thickness(8, 0, 0, 0);
+            _sayBusyLast = false; // le nouveau bouton reprend l'état au prochain rafraîchissement
             Grid.SetColumn(listen, 1);
             row.Children.Add(listen);
             _voiceFields.Children.Add(Field("Voix", row));
@@ -709,6 +791,7 @@ namespace AIRaceEngineer
                 RefreshPtt();
                 RefreshTest();
                 RefreshModels();
+                RefreshSayButtons();
                 var state = (_plugin.Updater.State ?? "").TrimEnd('.');
                 _updateState.Text = state;
                 _updateState.Visibility = state.Length == 0 ? Visibility.Collapsed : Visibility.Visible;

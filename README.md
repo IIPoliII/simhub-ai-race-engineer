@@ -57,7 +57,7 @@ le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire :
   OpenAI (Ollama...). Une fois la clé collée, la liste « Modèle » se remplit avec les modèles disponibles chez
   le fournisseur, les conseillés en tête. Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API
   refuse le modèle, la page propose ceux qu'elle accepte en un clic.
-  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistral3`.
+  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistralai/Ministral-3-14B-Instruct-2512`.
     Le plugin utilise l'API v2 d'Infomaniak, qui donne accès à tout leur catalogue (Mistral Small 4, Gemma 4...).
   - Cloudflare : un token API Workers AI et ton Account ID.
 - **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière,

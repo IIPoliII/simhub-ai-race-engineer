@@ -136,8 +136,13 @@ class Engine:
         return self.plugin.snapshot()
 
     def say(self, text: str):
-        samples, rate = self.voice.render(text)
-        audio.play(samples, rate)
+        # « À la radio » bloque les boutons Radio check / Écouter de la page jusqu'à la fin de la phrase
+        self.plugin.status("À la radio")
+        try:
+            samples, rate = self.voice.render(text)
+            audio.play(samples, rate)
+        finally:
+            self.plugin.status("Prêt")
 
     def answer_audio(self, samples):
         text, t_stt = timed(self.stt.transcribe, samples)

@@ -31,7 +31,7 @@ namespace AIRaceEngineer
             new ProviderInfo
             {
                 Id = "infomaniak", Name = "Infomaniak", Tagline = "Suisse · 1M de crédits offerts",
-                Models = new[] { "mistral3", "mistralai/Mistral-Small-4-119B-2603", "google/gemma-4-31B-it" },
+                Models = new[] { "mistralai/Ministral-3-14B-Instruct-2512", "mistralai/Mistral-Small-4-119B-2603", "google/gemma-4-31B-it" },
                 AccountLabel = "Product ID", AccountHelp = "Manager Infomaniak → AI Tools : le numéro du produit.",
                 KeyHelp = "Token API avec le scope « ai-tools ».",
                 KeyHelpUrl = "https://www.infomaniak.com/fr/hebergement/ai-tools",
@@ -203,7 +203,8 @@ namespace AIRaceEngineer
         private void Migrate()
         {
             // 0.2.0 proposait un nom de modèle Infomaniak refusé par l'API
-            if (Providers.TryGetValue("infomaniak", out var inf) && inf.Model == "Ministral-3-14B") inf.Model = "mistral3";
+            // « mistral3 » est l'ancien alias de l'API v1 pour ce modèle : on garde son vrai nom
+            if (Providers.TryGetValue("infomaniak", out var inf) && (inf.Model == "Ministral-3-14B" || inf.Model == "mistral3")) inf.Model = "mistralai/Ministral-3-14B-Instruct-2512";
             // 0.4.0 : la voix française de Kokoro comprend mal l'anglais de course, les voix neuronales deviennent la voix par défaut
             if (SettingsVersion < 2 && TtsEngine == "kokoro") TtsEngine = "neural";
             SettingsVersion = 2;

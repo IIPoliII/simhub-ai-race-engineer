@@ -100,7 +100,7 @@ namespace AIRaceEngineer
         {
             var set = new HashSet<string>(fetched.Where(m => !string.IsNullOrWhiteSpace(m)), StringComparer.Ordinal);
             if (set.Count == 0) return new string[0];
-            // Les conseillés d'abord (même s'ils sont des alias absents du catalogue, ex. « mistral3 » chez Infomaniak)
+            // Les conseillés d'abord
             var head = info.Models.ToList();
             return head.Concat(set.Where(m => !head.Contains(m)).OrderBy(m => m, StringComparer.OrdinalIgnoreCase)).ToArray();
         }

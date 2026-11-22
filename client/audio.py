@@ -50,7 +50,7 @@ def beep(freq=1200.0, duration=0.06, rate=24000, volume=0.15):
 
 
 # Niveau d'une F1 qui passe à 12 m du micro, par rapport à la voix (crête à 1)
-TRACK_LEVEL = 0.10
+TRACK_LEVEL = 0.07
 
 
 def radio_fx(x: np.ndarray, rate: int, track=False) -> np.ndarray:

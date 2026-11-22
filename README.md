@@ -31,26 +31,29 @@ Jeu ──► SimHub ──► plugin AI Race Engineer ──► http://127.0.0.
 ### Prérequis
 
 - Windows et [SimHub](https://www.simhubdash.com/)
-- [.NET SDK](https://dotnet.microsoft.com/download) 8 ou plus récent, pour compiler le plugin (Visual Studio n'est pas nécessaire)
-- [uv](https://docs.astral.sh/uv/), qui installe tout seul le bon Python :
+- [uv](https://docs.astral.sh/uv/) pour le client vocal (il installe tout seul le bon Python) :
   ```powershell
   powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
   ```
 
 ### 1. Le plugin SimHub
 
-Ferme SimHub, puis à la racine du projet :
+Télécharge **`Installer-AIRaceEngineer.cmd`** depuis la [dernière release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
+et double-clique dessus. Tu peux aussi coller cette commande dans PowerShell :
 
 ```powershell
-.\install-plugin.ps1
+irm https://raw.githubusercontent.com/IIPoliII/simhub-ai-race-engineer/main/install.ps1 | iex
 ```
 
-Le script compile le plugin et copie `AIRaceEngineer.dll` dans le dossier de SimHub. Il demande les droits
-admin, car SimHub est installé dans Program Files. Si SimHub est ailleurs : `.\install-plugin.ps1 -SimHubDir "D:\SimHub"`.
+L'installateur trouve SimHub, télécharge la dernière version du plugin, attend que SimHub soit fermé, puis copie
+la DLL. Windows demande les droits admin, car SimHub est installé dans Program Files. Rien à compiler.
 
 Relance SimHub et accepte d'activer **AI Race Engineer**. Le plugin apparaît alors dans le menu de gauche de
 SimHub, avec son statut en direct. S'il n'y est pas, active-le dans Settings → Plugins.
 Lance une session en jeu : le statut passe au vert et <http://127.0.0.1:8889/snapshot> affiche ta télémétrie en JSON.
+
+**Mises à jour** : au démarrage de SimHub, le plugin vérifie s'il existe une nouvelle version. Si oui, clique sur
+« Installer la version X » dans sa page, accepte la demande d'autorisation et redémarre SimHub.
 
 ### 2. Le client vocal
 
@@ -131,13 +134,29 @@ les voitures de ta classe.
 plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   AIRaceEnginePlugin.cs   construit l'instantané JSON (4 fois par seconde)
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
-  SettingsControl.cs      panneau de statut dans le menu de SimHub
-install-plugin.ps1      compile et installe le plugin
+  SettingsControl.cs      panneau de statut et de mises à jour dans le menu de SimHub
+  Updater.cs              vérifie et installe les nouvelles releases GitHub
+install.ps1             installateur (télécharge la dernière release)
+Installer-AIRaceEngineer.cmd   la même chose en double-clic
+dev-install.ps1         [dev] compile depuis les sources et installe (.NET SDK requis)
+release.ps1             [mainteneur] publie une release avec la DLL
 client/                 Client vocal (Python)
   engineer.py             point d'entrée et boucle push-to-talk
   stt.py / llm.py / tts.py / ptt.py / audio.py / telemetry.py
   sample_snapshot.json    télémétrie d'exemple pour tester sans jeu
 ```
+
+## Développement
+
+Pour compiler le plugin, il faut le [.NET SDK](https://dotnet.microsoft.com/download) 8 ou plus récent
+(Visual Studio n'est pas nécessaire). SimHub doit être fermé :
+
+```powershell
+.\dev-install.ps1
+```
+
+Pour publier une nouvelle version, monte `<Version>` dans `plugin/AIRaceEngineer.csproj`, commite, pousse, puis
+lance `.\release.ps1`. Les plugins installés la proposeront au prochain démarrage de SimHub.
 
 ## Idées pour la suite
 

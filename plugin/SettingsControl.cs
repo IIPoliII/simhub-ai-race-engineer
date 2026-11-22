@@ -12,6 +12,9 @@ namespace AIRaceEngineer
     {
         private readonly AIRaceEnginePlugin _plugin;
         private readonly TextBlock _status;
+        private readonly TextBlock _updateStatus;
+        private readonly Button _checkButton;
+        private readonly Button _installButton;
         private readonly DispatcherTimer _timer;
 
         // Icône micro pour le menu de gauche
@@ -40,6 +43,24 @@ namespace AIRaceEngineer
                 TextWrapping = TextWrapping.Wrap,
             });
 
+            // Mises à jour
+            var updater = _plugin.Updater;
+            panel.Children.Add(new TextBlock { Text = $"Mises à jour  (version installée : {updater.Current})", FontSize = 16, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, 28, 0, 8) });
+            _updateStatus = new TextBlock { Margin = new Thickness(0, 0, 0, 8), TextWrapping = TextWrapping.Wrap };
+            panel.Children.Add(_updateStatus);
+
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal };
+            _installButton = new Button { Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 8, 0) };
+            _installButton.Click += (s, e) => updater.InstallAsync();
+            _checkButton = new Button { Content = "Vérifier", Padding = new Thickness(10, 4, 10, 4), Margin = new Thickness(0, 0, 8, 0) };
+            _checkButton.Click += (s, e) => updater.CheckAsync();
+            var releases = new Button { Content = "Notes de version", Padding = new Thickness(10, 4, 10, 4) };
+            releases.Click += (s, e) => Process.Start(new ProcessStartInfo($"https://github.com/{Updater.Repo}/releases") { UseShellExecute = true });
+            buttons.Children.Add(_installButton);
+            buttons.Children.Add(_checkButton);
+            buttons.Children.Add(releases);
+            panel.Children.Add(buttons);
+
             Content = new ScrollViewer { Content = panel, VerticalScrollBarVisibility = ScrollBarVisibility.Auto };
 
             _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
@@ -50,6 +71,12 @@ namespace AIRaceEngineer
 
         private void Refresh()
         {
+            var updater = _plugin.Updater;
+            _updateStatus.Text = updater.State;
+            _installButton.Visibility = updater.UpdateAvailable ? Visibility.Visible : Visibility.Collapsed;
+            _installButton.Content = $"Installer la version {updater.Latest}";
+            _installButton.IsEnabled = _checkButton.IsEnabled = !updater.Busy;
+
             if (_plugin.ServerError != null)
             {
                 _status.Text = "● " + _plugin.ServerError;

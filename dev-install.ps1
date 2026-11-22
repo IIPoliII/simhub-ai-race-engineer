@@ -1,6 +1,6 @@
-﻿# Compile le plugin et le copie dans le dossier de SimHub.
-# Usage :  .\install-plugin.ps1            (SimHub dans C:\Program Files (x86)\SimHub)
-#          .\install-plugin.ps1 -SimHubDir "D:\SimHub"
+﻿# [Développeurs] Compile le plugin depuis les sources et le copie dans le dossier de SimHub.
+# Usage :  .\dev-install.ps1            (SimHub dans C:\Program Files (x86)\SimHub)
+#          .\dev-install.ps1 -SimHubDir "D:\SimHub"
 param(
     [string]$SimHubDir = $(if ($env:SIMHUB_INSTALL_PATH) { $env:SIMHUB_INSTALL_PATH } else { "C:\Program Files (x86)\SimHub" })
 )

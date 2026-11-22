@@ -20,6 +20,7 @@ namespace AIRaceEngineer
         public string Status { get; private set; } = "En attente du jeu";
         public string ServerError { get; private set; }
         public string Url => $"http://127.0.0.1:{Port}/snapshot";
+        public Updater Updater { get; } = new Updater();
 
         public string LeftMenuTitle => "AI Race Engineer";
         public System.Windows.Media.ImageSource PictureIcon => SettingsControl.Icon;
@@ -53,6 +54,7 @@ namespace AIRaceEngineer
                 ServerError = $"Impossible d'ouvrir le port {Port} : {ex.Message}";
                 SimHub.Logging.Current.Error("[AI Race Engineer] " + ServerError);
             }
+            Updater.CheckAsync(); // en arrière-plan, n'installe rien sans clic
         }
 
         public void End(PluginManager pluginManager)
@@ -197,8 +199,8 @@ namespace AIRaceEngineer
             if (o == null) return null;
             return new
             {
-                name = o.Name,
-                car = o.CarName,
+                name = Clean(o.Name),
+                car = Clean(o.CarName),
                 position = o.Position,
                 gap_s = o.GaptoPlayer is double g ? R(Math.Abs(g), 1) : null,
                 laps_apart = o.LapsToPlayer is int l && l != 0 ? Math.Abs(l) : (int?)null,
@@ -207,6 +209,14 @@ namespace AIRaceEngineer
                 in_pit = o.IsCarInPitLane || o.IsCarInPit,
                 pit_stops = o.PitCount,
             };
+        }
+
+        /// <summary>Les pseudos viennent des autres joueurs : texte court, sans caractères de contrôle.</summary>
+        private static string Clean(string s, int max = 32)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            var chars = s.Where(c => !char.IsControl(c)).Take(max).ToArray();
+            return new string(chars).Trim();
         }
 
         private static object Corners(double fl, double fr, double rl, double rr, int digits)

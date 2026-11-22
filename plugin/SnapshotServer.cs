@@ -65,15 +65,31 @@ namespace AIRaceEngineer
         {
             var reader = new StreamReader(stream, Encoding.ASCII);
             var requestLine = reader.ReadLine() ?? "";
-            string line;
-            while (!string.IsNullOrEmpty(line = reader.ReadLine())) { } // ignore les en-têtes
+            string line, host = null;
+            bool hasOrigin = false;
+            while (!string.IsNullOrEmpty(line = reader.ReadLine()))
+            {
+                int colon = line.IndexOf(':');
+                if (colon <= 0) continue;
+                var name = line.Substring(0, colon).Trim();
+                if (name.Equals("Host", StringComparison.OrdinalIgnoreCase)) host = line.Substring(colon + 1).Trim();
+                else if (name.Equals("Origin", StringComparison.OrdinalIgnoreCase)) hasOrigin = true;
+            }
 
             var parts = requestLine.Split(' ');
             var path = parts.Length > 1 ? parts[1] : "/";
 
             string status = "200 OK";
             string body;
-            if (path == "/" || path.StartsWith("/snapshot"))
+            // Anti DNS rebinding : seuls les appels locaux directs sont acceptés,
+            // pas les requêtes JavaScript venant d'une page web (qui envoient Origin).
+            bool localHost = host == $"127.0.0.1:{_port}" || host == $"localhost:{_port}";
+            if (!localHost || hasOrigin)
+            {
+                status = "403 Forbidden";
+                body = "{\"error\":\"forbidden\"}";
+            }
+            else if (path == "/" || path.StartsWith("/snapshot"))
                 body = _getJson();
             else
             {

@@ -43,27 +43,31 @@ Rien à compiler, rien à configurer en ligne de commande.
 ## Réglages
 
 Relance SimHub et accepte d'activer **AI Race Engineer** : il apparaît dans le menu de gauche (sinon : Settings → Plugins).
-Tout se règle dans sa page :
+Tout se règle dans sa page. En haut, trois cartes montrent l'état du jeu, du client vocal et du push-to-talk,
+et une liste « Mise en route » indique ce qu'il reste à faire :
 
 - **Langue et voix** : français ou anglais (par défaut, la langue de ton Windows), voix selon la langue
   (en anglais, `George` sonne très « ingé britannique »), ElevenLabs en option, effet radio, reconnaissance rapide ou précise.
 - **Intelligence artificielle** : Infomaniak, Cloudflare, OpenAI, Claude, ou n'importe quelle API compatible
-  OpenAI (Ollama...). Le bouton **Tester la connexion** vérifie la clé et le modèle.
-  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools).
+  OpenAI (Ollama...). Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API refuse le modèle,
+  la page propose ceux qu'elle accepte en un clic.
+  - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistral3`
+    (aussi `mistral24b` et `qwen3`).
   - Cloudflare : un token API Workers AI et ton Account ID.
 - **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière,
-  places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours).
+  places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce montre un exemple de phrase.
 - **Push-to-talk** : dans **Controls and events**, ajoute un mapping avec l'action
   `AIRaceEnginePlugin.PushToTalk` et appuie sur le bouton de ton volant. La page du plugin montre en direct
   si le bouton est détecté.
 
 Les clés API sont enregistrées chiffrées (DPAPI Windows) dans `%LOCALAPPDATA%\AIRaceEngineer\settings.json`.
 
-Le client vocal démarre et s'arrête avec SimHub. Sa page affiche son état, et propose « Tester la voix »
-et « Journal du client » en cas de souci.
+Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il s'arrête. En cas de souci, la carte
+« Client vocal » affiche la cause, et le bouton « Journal » ouvre son journal.
 
-**Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, clique sur
-« Installer la version X », accepte la demande d'autorisation et redémarre SimHub. Le client vocal est mis à jour en même temps.
+**Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, un bandeau apparaît en haut
+de sa page : clique sur « Installer la mise à jour » et accepte la demande d'autorisation. Le client vocal est mis à jour
+en même temps, puis le plugin propose de redémarrer SimHub tout seul.
 
 ## Latence
 
@@ -97,6 +101,7 @@ plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   Callouts.cs             annonces automatiques (tour, écarts, positions, carburant)
   Settings.cs             réglages, fournisseurs d'IA, voix, config envoyée au client
   SettingsControl.cs      page du plugin dans SimHub
+  Theme.cs                thème de la page (boutons, interrupteurs, tuiles)
   ClientRunner.cs         lance le client vocal en arrière-plan
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
   Updater.cs              mises à jour depuis les releases GitHub

@@ -14,14 +14,19 @@ namespace AIRaceEngineer
     {
         public static string ClientDir => Path.Combine(EngineerSettings.DataDir, "client");
         public static string LogPath => Path.Combine(EngineerSettings.DataDir, "client.log");
+        private static readonly TimeSpan QuickExit = TimeSpan.FromSeconds(60);
 
+        private readonly object _sync = new object();
         private Process _process;
         private StreamWriter _log;
-        private readonly object _logLock = new object();
+        private DateTime _startedAt;
+        private string _lastLine;
 
         public string LastError { get; private set; }
+        /// <summary>Arrêts juste après le démarrage, d'affilée : au-delà de 3 on ne relance plus tout seul.</summary>
+        public int QuickExits { get; private set; }
         public bool Installed => File.Exists(Path.Combine(ClientDir, "engineer.py"));
-        public bool Running => _process != null && !_process.HasExited;
+        public bool Running { get { var p = _process; return p != null && !p.HasExited; } }
 
         public static string FindUv()
         {
@@ -35,53 +40,94 @@ namespace AIRaceEngineer
             return candidates.FirstOrDefault(File.Exists);
         }
 
-        public void Start()
+        /// <param name="manual">clic sur Démarrer : remet à zéro le compteur de plantages</param>
+        public void Start(bool manual = false)
         {
-            if (Running) return;
-            LastError = null;
-            if (!Installed) { LastError = "Client vocal non installé : lance l'installateur."; return; }
-            var uv = FindUv();
-            if (uv == null) { LastError = "uv introuvable : relance l'installateur."; return; }
-
-            try
+            lock (_sync)
             {
-                Directory.CreateDirectory(EngineerSettings.DataDir);
-                lock (_logLock)
+                if (Running) return;
+                if (manual) QuickExits = 0;
+
+                if (!Installed)
                 {
-                    _log?.Dispose();
-                    _log = new StreamWriter(LogPath, false, new UTF8Encoding(false)) { AutoFlush = true };
+                    Fail($"Client vocal introuvable ({ClientDir}). Lance l'installateur.");
+                    return;
+                }
+                var uv = FindUv();
+                if (uv == null)
+                {
+                    Fail("uv introuvable (" + Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin") + "). Relance l'installateur.");
+                    return;
                 }
 
-                var psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --managed")
+                try
                 {
-                    WorkingDirectory = ClientDir,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    StandardOutputEncoding = Encoding.UTF8,
-                    StandardErrorEncoding = Encoding.UTF8,
-                };
-                psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
-                psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                    Directory.CreateDirectory(EngineerSettings.DataDir);
+                    _log?.Dispose();
+                    _log = new StreamWriter(LogPath, false, new UTF8Encoding(false)) { AutoFlush = true };
+                    _lastLine = null;
 
-                _process = new Process { StartInfo = psi, EnableRaisingEvents = true };
-                _process.OutputDataReceived += (s, e) => Log(e.Data);
-                _process.ErrorDataReceived += (s, e) => Log(e.Data);
-                _process.Start();
-                _process.BeginOutputReadLine();
-                _process.BeginErrorReadLine();
+                    var psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --managed")
+                    {
+                        WorkingDirectory = ClientDir,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        StandardOutputEncoding = Encoding.UTF8,
+                        StandardErrorEncoding = Encoding.UTF8,
+                    };
+                    psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
+                    psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+
+                    var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
+                    process.OutputDataReceived += (s, e) => Log(e.Data);
+                    process.ErrorDataReceived += (s, e) => Log(e.Data);
+                    process.Exited += (s, e) => OnExited(process);
+                    _process = process;
+                    _startedAt = DateTime.UtcNow;
+                    LastError = null;
+                    process.Start();
+                    process.BeginOutputReadLine();
+                    process.BeginErrorReadLine();
+                    SimHub.Logging.Current.Info($"[AI Race Engineer] client vocal lancé ({uv}, {ClientDir})");
+                }
+                catch (Exception ex)
+                {
+                    _process = null;
+                    Fail("Impossible de lancer le client : " + ex.Message);
+                }
             }
-            catch (Exception ex)
+        }
+
+        private void OnExited(Process process)
+        {
+            try { process.WaitForExit(); } catch { } // laisse arriver les dernières lignes de sortie
+            lock (_sync)
             {
-                LastError = "Impossible de lancer le client : " + ex.Message;
+                if (!ReferenceEquals(process, _process)) return; // arrêt volontaire
+                _process = null;
+                int code;
+                try { code = process.ExitCode; } catch { code = -1; }
+                QuickExits = DateTime.UtcNow - _startedAt < QuickExit ? QuickExits + 1 : 0;
+                Fail($"Le client vocal s'est arrêté (code {code})" + (_lastLine != null ? " : " + _lastLine : "."));
             }
+        }
+
+        private void Fail(string message)
+        {
+            if (message != LastError) SimHub.Logging.Current.Warn("[AI Race Engineer] " + message);
+            LastError = message;
         }
 
         public void Stop()
         {
-            var p = _process;
-            _process = null;
+            Process p;
+            lock (_sync)
+            {
+                p = _process;
+                _process = null;
+            }
             if (p == null || p.HasExited) return;
             try
             {
@@ -95,14 +141,15 @@ namespace AIRaceEngineer
         public void Restart()
         {
             Stop();
-            Start();
+            Start(manual: true);
         }
 
         private void Log(string line)
         {
             if (line == null) return;
-            lock (_logLock)
+            lock (_sync)
             {
+                if (line.Trim().Length > 0) _lastLine = line.Trim().Length > 160 ? line.Trim().Substring(0, 160) + "..." : line.Trim();
                 try { _log?.WriteLine(line); } catch { }
             }
         }

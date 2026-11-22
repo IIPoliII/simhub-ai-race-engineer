@@ -10,6 +10,7 @@ Le push-to-talk est l'action « PushToTalk » à associer à un bouton dans Cont
 """
 import argparse
 import json
+import os
 import queue
 import sys
 import threading
@@ -42,11 +43,25 @@ DEFAULT_CONFIG = {
 class Plugin:
     """Dialogue avec le plugin SimHub (serveur local)."""
 
+    # Jeton secret écrit par le plugin à chaque démarrage de SimHub, exigé sauf pour /snapshot
+    TOKEN_FILE = Path(os.environ.get("LOCALAPPDATA", "")) / "AIRaceEngineer" / "api-token"
+
     def __init__(self, url: str = PLUGIN_URL):
         self.http = httpx.Client(base_url=url, timeout=1.0)
+        self.token = self._read_token()
+
+    def _read_token(self) -> str:
+        try:
+            return self.TOKEN_FILE.read_text(encoding="utf-8").strip()
+        except OSError:
+            return ""
 
     def get(self, path: str, **params):
-        r = self.http.get(path, params=params)
+        r = self.http.get(path, params=params, headers={"Authorization": f"Bearer {self.token}"})
+        if r.status_code == 401:
+            # SimHub a redémarré : nouveau jeton
+            self.token = self._read_token()
+            r = self.http.get(path, params=params, headers={"Authorization": f"Bearer {self.token}"})
         r.raise_for_status()
         return r.json()
 
@@ -66,8 +81,8 @@ class Plugin:
         """Affiché dans la page du plugin, et dans le journal."""
         print(message, flush=True)
         try:
-            self.http.get("/client-status", params={"m": message})
-        except httpx.HTTPError:
+            self.get("/client-status", m=message)
+        except (httpx.HTTPError, ValueError):
             pass
 
 

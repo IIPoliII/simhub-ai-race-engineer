@@ -20,40 +20,53 @@ namespace AIRaceEngineer
     /// <summary>Description d'un fournisseur d'IA compatible OpenAI.</summary>
     public class ProviderInfo
     {
-        public string Id, Label, DefaultModel, AccountLabel, KeyHelpUrl;
+        public string Id, Name, Tagline, AccountLabel, AccountHelp, KeyHelpUrl, KeyHelp;
+        public string[] Models;
         public Func<ProviderSettings, string> BaseUrl;
         public bool NeedsKey = true;
+        public string DefaultModel => Models[0];
 
         public static readonly ProviderInfo[] All =
         {
             new ProviderInfo
             {
-                Id = "infomaniak", Label = "Infomaniak (Suisse, 1M de crédits offerts)", DefaultModel = "Ministral-3-14B",
-                AccountLabel = "Product ID", KeyHelpUrl = "https://www.infomaniak.com/fr/hebergement/ai-tools",
+                Id = "infomaniak", Name = "Infomaniak", Tagline = "Suisse · 1M de crédits offerts",
+                Models = new[] { "mistral3", "mistral24b", "qwen3" },
+                AccountLabel = "Product ID", AccountHelp = "Manager Infomaniak → AI Tools : le numéro du produit.",
+                KeyHelp = "Token API avec le scope « ai-tools ».",
+                KeyHelpUrl = "https://www.infomaniak.com/fr/hebergement/ai-tools",
                 BaseUrl = p => $"https://api.infomaniak.com/1/ai/{p.AccountId.Trim()}/openai",
             },
             new ProviderInfo
             {
-                Id = "cloudflare", Label = "Cloudflare Workers AI (quota gratuit par jour)", DefaultModel = "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
-                AccountLabel = "Account ID", KeyHelpUrl = "https://dash.cloudflare.com/profile/api-tokens",
+                Id = "cloudflare", Name = "Cloudflare", Tagline = "Workers AI · quota gratuit / jour",
+                Models = new[] { "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct-fast", "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+                AccountLabel = "Account ID", AccountHelp = "Tableau de bord Cloudflare → Workers AI.",
+                KeyHelp = "Token API avec la permission « Workers AI ».",
+                KeyHelpUrl = "https://dash.cloudflare.com/profile/api-tokens",
                 BaseUrl = p => $"https://api.cloudflare.com/client/v4/accounts/{p.AccountId.Trim()}/ai/v1",
             },
             new ProviderInfo
             {
-                Id = "openai", Label = "OpenAI", DefaultModel = "gpt-4.1-mini",
+                Id = "openai", Name = "OpenAI", Tagline = "GPT · quelques centimes / course",
+                Models = new[] { "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o-mini" },
+                KeyHelp = "Clé API de ton compte OpenAI.",
                 KeyHelpUrl = "https://platform.openai.com/api-keys",
                 BaseUrl = p => "https://api.openai.com/v1",
             },
             new ProviderInfo
             {
-                Id = "claude", Label = "Claude (Anthropic)", DefaultModel = "claude-haiku-5-5",
+                Id = "claude", Name = "Claude", Tagline = "Anthropic · très bon en français",
+                Models = new[] { "claude-haiku-5-5", "claude-sonnet-5-5" },
+                KeyHelp = "Clé API de la console Anthropic.",
                 KeyHelpUrl = "https://console.anthropic.com/settings/keys",
                 BaseUrl = p => "https://api.anthropic.com/v1/",
             },
             new ProviderInfo
             {
-                Id = "custom", Label = "Autre (compatible OpenAI, ex. Ollama en local)", DefaultModel = "qwen3:4b",
-                NeedsKey = false,
+                Id = "custom", Name = "Autre", Tagline = "Ollama, LM Studio, API compatible",
+                Models = new[] { "qwen3:4b", "llama3.2:3b", "mistral-small3.2" },
+                NeedsKey = false, KeyHelp = "Souvent inutile en local.",
                 BaseUrl = p => string.IsNullOrWhiteSpace(p.BaseUrl) ? "http://localhost:11434/v1" : p.BaseUrl.Trim(),
             },
         };
@@ -105,6 +118,7 @@ namespace AIRaceEngineer
         public int FuelWarningLaps { get; set; } = 3;
 
         public bool AutoStartClient { get; set; } = true;
+        public bool PttTested { get; set; }
 
         public ProviderSettings Current(string id = null)
         {
@@ -114,7 +128,26 @@ namespace AIRaceEngineer
             return p;
         }
 
-        public string Voice => Language == "fr" ? VoiceFr : VoiceEn;
+        [JsonIgnore] public string Voice => Language == "fr" ? VoiceFr : VoiceEn;
+
+        /// <summary>Clé (et identifiant de compte) renseignés pour le fournisseur choisi.</summary>
+        [JsonIgnore]
+        public bool AiConfigured
+        {
+            get
+            {
+                var info = ProviderInfo.Get(Provider);
+                var p = Current();
+                return !info.NeedsKey || (!string.IsNullOrWhiteSpace(p.ApiKey) &&
+                       (info.AccountLabel == null || !string.IsNullOrWhiteSpace(p.AccountId)));
+            }
+        }
+
+        public string ModelOrDefault()
+        {
+            var p = Current();
+            return string.IsNullOrWhiteSpace(p.Model) ? ProviderInfo.Get(Provider).DefaultModel : p.Model.Trim();
+        }
 
         // ---------- Persistance (%LOCALAPPDATA%\AIRaceEngineer\settings.json, clés chiffrées avec DPAPI) ----------
 
@@ -129,6 +162,7 @@ namespace AIRaceEngineer
                 {
                     var s = JsonConvert.DeserializeObject<EngineerSettings>(File.ReadAllText(FilePath, Encoding.UTF8)) ?? new EngineerSettings();
                     s.TransformSecrets(Unprotect);
+                    s.Migrate();
                     return s;
                 }
             }
@@ -145,6 +179,12 @@ namespace AIRaceEngineer
             copy.TransformSecrets(Protect);
             Directory.CreateDirectory(DataDir);
             File.WriteAllText(FilePath, JsonConvert.SerializeObject(copy, Formatting.Indented), Encoding.UTF8);
+        }
+
+        private void Migrate()
+        {
+            // 0.2.0 proposait un nom de modèle Infomaniak refusé par l'API
+            if (Providers.TryGetValue("infomaniak", out var inf) && inf.Model == "Ministral-3-14B") inf.Model = "mistral3";
         }
 
         private void TransformSecrets(Func<string, string> f)
@@ -172,8 +212,7 @@ namespace AIRaceEngineer
         {
             var info = ProviderInfo.Get(Provider);
             var p = Current();
-            bool configured = !info.NeedsKey || (!string.IsNullOrWhiteSpace(p.ApiKey) &&
-                              (info.AccountLabel == null || !string.IsNullOrWhiteSpace(p.AccountId)));
+            bool configured = AiConfigured;
             return new
             {
                 rev,
@@ -184,7 +223,7 @@ namespace AIRaceEngineer
                     configured,
                     base_url = info.BaseUrl(p),
                     api_key = string.IsNullOrWhiteSpace(p.ApiKey) ? "none" : p.ApiKey.Trim(),
-                    model = string.IsNullOrWhiteSpace(p.Model) ? info.DefaultModel : p.Model.Trim(),
+                    model = ModelOrDefault(),
                     max_tokens = 120,
                     temperature = 0.3,
                 },

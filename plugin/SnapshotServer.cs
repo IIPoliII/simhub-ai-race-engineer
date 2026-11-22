@@ -11,17 +11,18 @@ namespace AIRaceEngineer
     /// <summary>
     /// Mini serveur HTTP sur 127.0.0.1 uniquement. TcpListener plutôt que HttpListener :
     /// aucun droit admin ni réservation d'URL nécessaire.
-    /// Le routeur reçoit (chemin, paramètres) et renvoie du JSON, ou null pour un 404.
+    /// Le routeur reçoit (chemin, paramètres, en-tête Authorization) et renvoie du JSON,
+    /// null pour un 404, ou lève UnauthorizedAccessException pour un 401.
     /// </summary>
     internal sealed class SnapshotServer
     {
         private readonly int _port;
-        private readonly Func<string, Dictionary<string, string>, string> _route;
+        private readonly Func<string, Dictionary<string, string>, string, string> _route;
         private TcpListener _listener;
         private Thread _thread;
         private volatile bool _running;
 
-        public SnapshotServer(int port, Func<string, Dictionary<string, string>, string> route)
+        public SnapshotServer(int port, Func<string, Dictionary<string, string>, string, string> route)
         {
             _port = port;
             _route = route;
@@ -69,7 +70,7 @@ namespace AIRaceEngineer
         {
             var reader = new StreamReader(stream, Encoding.ASCII);
             var requestLine = reader.ReadLine() ?? "";
-            string line, host = null;
+            string line, host = null, auth = null;
             bool hasOrigin = false;
             while (!string.IsNullOrEmpty(line = reader.ReadLine()))
             {
@@ -78,6 +79,7 @@ namespace AIRaceEngineer
                 var name = line.Substring(0, colon).Trim();
                 if (name.Equals("Host", StringComparison.OrdinalIgnoreCase)) host = line.Substring(colon + 1).Trim();
                 else if (name.Equals("Origin", StringComparison.OrdinalIgnoreCase)) hasOrigin = true;
+                else if (name.Equals("Authorization", StringComparison.OrdinalIgnoreCase)) auth = line.Substring(colon + 1).Trim();
             }
 
             var parts = requestLine.Split(' ');
@@ -98,7 +100,12 @@ namespace AIRaceEngineer
             }
             else
             {
-                body = _route(path == "/" ? "/snapshot" : path, query);
+                try { body = _route(path == "/" ? "/snapshot" : path, query, auth); }
+                catch (UnauthorizedAccessException)
+                {
+                    status = "401 Unauthorized";
+                    body = "{\"error\":\"unauthorized\"}";
+                }
                 if (body == null)
                 {
                     status = "404 Not Found";

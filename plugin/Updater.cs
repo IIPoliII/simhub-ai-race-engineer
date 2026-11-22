@@ -27,6 +27,8 @@ namespace AIRaceEngineer
         public bool Busy { get; private set; }
         public bool Installed { get; private set; }
         public bool UpdateAvailable => !Installed && Latest != null && Latest > Current;
+        /// <summary>Déclenché quand la nouvelle version est copiée : il reste à redémarrer SimHub.</summary>
+        public event Action InstallFinished;
 
         public const string ClientAssetName = "client.zip";
 
@@ -148,6 +150,7 @@ namespace AIRaceEngineer
 
             Installed = true;
             State = $"Version {Latest} installée. Redémarre SimHub pour l'utiliser.";
+            InstallFinished?.Invoke();
         }
 
         /// <summary>Extrait l'archive par-dessus le dossier existant (garde .venv et les modèles téléchargés).</summary>

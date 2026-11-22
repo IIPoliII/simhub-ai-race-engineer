@@ -63,7 +63,9 @@ l'autorisation Windows (les droits du dossier ne sont jamais modifiés).
 
 Relance SimHub et accepte d'activer **AI Race Engineer** : il apparaît dans le menu de gauche (sinon : Settings → Plugins).
 Tout se règle dans sa page, rangée en colonnes pour tenir sur un écran. En haut, une bande d'état montre l'IA,
-le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire :
+le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire. Une fenêtre de bienvenue résume les choix
+au premier démarrage (le ? en haut de la page la rouvre), et le ? à côté de chaque IA et d'ElevenLabs ouvre un guide
+pas à pas : où créer le compte, quoi copier, combien ça coûte.
 
 - **Langue et voix** : français ou anglais (par défaut, la langue de ton Windows), puis le moteur de voix :
   - **En ligne** (par défaut) : voix neuronales Microsoft, gratuites et très naturelles (Henri, Denise, Rémy, Antoine
@@ -98,7 +100,7 @@ Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il 
 de sa page : clique sur « Installer ». La nouvelle version est préparée dans ton profil, et elle remplace l'ancienne
 quand SimHub se ferme (le plugin propose de le redémarrer tout de suite), après vérification de son empreinte.
 Pas de demande d'autorisation Windows, sauf si le dossier de SimHub est protégé : elle est alors demandée à chaque
-mise à jour. Le client vocal est mis à jour en même temps.
+mise à jour. Le client vocal est mis à jour en même temps. Ce qui change à chaque version : [CHANGELOG.fr.md](CHANGELOG.fr.md).
 
 **Performances** : le plugin est fait pour laisser la machine au jeu.
 - Le client vocal tourne en priorité « inférieure à la normale », et la reconnaissance vocale utilise au plus
@@ -143,6 +145,7 @@ plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   SettingsControl.cs      page du plugin dans SimHub
   Theme.cs                thème de la page (couleurs, boutons, interrupteurs, segments)
   ClientRunner.cs         lance le client vocal en arrière-plan (et le met en route au premier démarrage)
+  Guides.cs               fenêtre de bienvenue et guides ? de chaque IA
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
   Updater.cs              mises à jour depuis les releases GitHub
   LlmTester.cs            bouton « Tester la connexion »

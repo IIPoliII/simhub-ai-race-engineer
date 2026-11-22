@@ -38,7 +38,7 @@ namespace AIRaceEngineer
         private UniformGrid _strip;
         private Grid _columns;
         private int _columnCount;
-        private Button _clientButton, _radioButton, _listenButton;
+        private Button _clientButton, _radioButton, _listenButton, _providerHelp, _elevenHelp;
         private DateTime _sayClicked = DateTime.MinValue;
         private bool _saySeen, _sayBusyLast;
         private string _clientButtonLabel;
@@ -128,6 +128,12 @@ namespace AIRaceEngineer
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var welcome = Help("Bienvenue et guide de démarrage", GuideWindows.ShowWelcome);
+            welcome.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(welcome, 2);
+            grid.Children.Add(welcome);
 
             var left = new TextBlock { VerticalAlignment = VerticalAlignment.Center, TextWrapping = TextWrapping.Wrap };
             left.Inlines.Add(new Run("Ton ingénieur de course à la radio, pour tous les jeux SimHub") { FontSize = 14, Foreground = Theme.B("Text2") });
@@ -415,8 +421,14 @@ namespace AIRaceEngineer
                 }));
             }
             body.Children.Add(segments);
-            _providerHint = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), Margin = new Thickness(0, 0, 0, 8) };
-            body.Children.Add(_providerHint);
+            // Accroche du fournisseur, et son guide pas à pas (où créer le compte, quoi copier, combien ça coûte)
+            var hintRow = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 8) };
+            _providerHint = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), VerticalAlignment = VerticalAlignment.Center };
+            hintRow.Children.Add(_providerHint);
+            _providerHelp = Help("", () => GuideWindows.ShowGuide(S.Provider));
+            _providerHelp.Margin = new Thickness(8, 0, 0, 0);
+            hintRow.Children.Add(_providerHelp);
+            body.Children.Add(hintRow);
 
             _providerFields = new StackPanel();
             body.Children.Add(_providerFields);
@@ -444,6 +456,7 @@ namespace AIRaceEngineer
             var info = ProviderInfo.Get(S.Provider);
             var p = S.Current();
             _providerHint.Text = info.Tagline;
+            _providerHelp.ToolTip = info.Id == "custom" ? "Comment installer une IA sur ton PC" : "Comment configurer " + info.Name;
 
             // La liste des modèles se recharge quand on quitte un champ d'identification
             RoutedEventHandler reload = (s, e) => _catalog.Refresh(info, p);
@@ -603,7 +616,16 @@ namespace AIRaceEngineer
                 Changed();
                 RebuildVoiceFields();
             });
-            body.Children.Add(Field("Moteur", engines, _engineHint));
+            var engineHelp = new Grid();
+            engineHelp.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            engineHelp.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            engineHelp.Children.Add(_engineHint);
+            _elevenHelp = Help("Comment configurer ElevenLabs", () => GuideWindows.ShowGuide("elevenlabs"));
+            _elevenHelp.Margin = new Thickness(8, 0, 0, 0);
+            _elevenHelp.VerticalAlignment = VerticalAlignment.Top;
+            Grid.SetColumn(_elevenHelp, 1);
+            engineHelp.Children.Add(_elevenHelp);
+            body.Children.Add(Field("Moteur", engines, engineHelp));
 
             _voiceFields = new StackPanel();
             body.Children.Add(_voiceFields);
@@ -629,7 +651,8 @@ namespace AIRaceEngineer
             _engineHint.Text =
                 S.TtsEngine == "neural" ? "Voix neuronales Microsoft, gratuites et très naturelles. Sans internet, la voix hors ligne prend le relais"
                 : S.TtsEngine == "kokoro" ? "Kokoro, sur ton PC et sans internet. Moins naturelle en français"
-                : "La plus réaliste, payante à l'usage";
+                : "La plus réaliste, payante au-delà de l'essai gratuit. Demande un compte, une clé et une voix";
+            _elevenHelp.Visibility = S.TtsEngine == "elevenlabs" ? Visibility.Visible : Visibility.Collapsed;
 
             if (S.TtsEngine == "elevenlabs")
             {
@@ -779,7 +802,7 @@ namespace AIRaceEngineer
             body.Children.Add(_updateState);
             var ub = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             ub.Children.Add(Btn("Rechercher une mise à jour", () => u.CheckAsync(), "Btn", GSync));
-            ub.Children.Add(Btn("Notes de version", () => Open($"https://github.com/{Updater.Repo}/releases"), "BtnGhost", GLink));
+            ub.Children.Add(Btn("Notes de version", () => Open($"https://github.com/{Updater.Repo}/blob/main/CHANGELOG.fr.md"), "BtnGhost", GLink));
             body.Children.Add(ub);
             return card;
         }
@@ -921,6 +944,14 @@ namespace AIRaceEngineer
         {
             var b = new Button { Style = Theme.S(style), Content = BtnContent(text, glyph) };
             if (small) { b.Padding = new Thickness(8, 4, 8, 4); b.FontSize = 12; }
+            b.Click += (s, e) => onClick();
+            return b;
+        }
+
+        /// <summary>Petit bouton rond « ? » qui ouvre un guide.</summary>
+        private static Button Help(string tooltip, Action onClick)
+        {
+            var b = new Button { Style = Theme.S("BtnHelp"), Content = "?", ToolTip = tooltip, VerticalAlignment = VerticalAlignment.Center };
             b.Click += (s, e) => onClick();
             return b;
         }

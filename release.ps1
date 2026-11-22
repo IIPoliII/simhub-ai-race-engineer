@@ -1,10 +1,14 @@
 ﻿# [Mainteneur] Compile le plugin et publie une release GitHub : DLL, client vocal, installateurs MSI (FR/EN) et installateur en une ligne.
-# 1. Monte <Version> dans plugin/AIRaceEngineer.csproj   2. commit + push   3. .\release.ps1
+# 1. Monte <Version> dans plugin/AIRaceEngineer.csproj et écris ses notes dans CHANGELOG.md et CHANGELOG.fr.md
+# 2. commit + push   3. .\release.ps1
 param([switch]$MsiOnly)  # -MsiOnly : construit tout sans publier la release
 $ErrorActionPreference = "Stop"
 [xml]$proj = Get-Content (Join-Path $PSScriptRoot "plugin\AIRaceEngineer.csproj")
 $version = ($proj.Project.PropertyGroup | Where-Object { $_.Version } | Select-Object -First 1).Version
 if (-not $version) { throw "Version introuvable dans le csproj." }
+if (-not $MsiOnly -and -not (Select-String -Path (Join-Path $PSScriptRoot "CHANGELOG.md") -SimpleMatch "## [$version]" -Quiet)) {
+    throw "Pas de section [$version] dans CHANGELOG.md : écris les notes de version avant de publier."
+}
 
 dotnet build (Join-Path $PSScriptRoot "plugin\AIRaceEngineer.csproj") -c Release
 if ($LASTEXITCODE -ne 0) { throw "La compilation a échoué." }
@@ -43,5 +47,19 @@ try {
 } finally { Pop-Location }
 
 if ($MsiOnly) { $msis | ForEach-Object { Write-Host "MSI : $_" }; return }
+# Notes de la release : la section de cette version dans CHANGELOG.md (anglais) et CHANGELOG.fr.md (français)
+function Get-Notes([string]$file) {
+    $lines = Get-Content (Join-Path $PSScriptRoot $file) -Encoding UTF8
+    $start = [array]::FindIndex($lines, [Predicate[string]] { param($l) $l.StartsWith("## [$version]") })
+    if ($start -lt 0) { throw "Pas de section [$version] dans $file : écris les notes de version avant de publier." }
+    $end = [array]::FindIndex($lines, $start + 1, [Predicate[string]] { param($l) $l.StartsWith("## ") -or $l -match '^\[[^\]]+\]: ' })
+    if ($end -lt 0) { $end = $lines.Count }
+    ($lines[($start + 1)..($end - 1)] -join "`n").Trim()
+}
+$notes = Join-Path $out "release-notes.md"
+$body = "## English`n`n" + (Get-Notes "CHANGELOG.md") + "`n`n## Français`n`n" + (Get-Notes "CHANGELOG.fr.md") +
+    "`n`n**Installation** : ``AIRaceEngineer-Setup-en.msi`` / ``AIRaceEngineer-Setup-fr.msi``, or / ou ``Installer-AIRaceEngineer.cmd``."
+[IO.File]::WriteAllText($notes, $body, (New-Object Text.UTF8Encoding $false))
+
 $cmd = Join-Path $PSScriptRoot "Installer-AIRaceEngineer.cmd"
-gh release create "v$version" $dll $zip @msis $cmd --title "v$version" --generate-notes
+gh release create "v$version" $dll $zip @msis $cmd --title "v$version" --notes-file $notes

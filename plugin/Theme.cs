@@ -91,6 +91,30 @@ namespace AIRaceEngineer
     <Setter Property='BorderBrush' Value='Transparent'/>
     <Setter Property='Padding' Value='8,6'/>
   </Style>
+  <Style x:Key='BtnHelp' TargetType='Button'>
+    <Setter Property='Foreground' Value='#64B5F6'/>
+    <Setter Property='Width' Value='22'/>
+    <Setter Property='Height' Value='22'/>
+    <Setter Property='FontSize' Value='12'/>
+    <Setter Property='FontWeight' Value='SemiBold'/>
+    <Setter Property='Cursor' Value='Hand'/>
+    <Setter Property='SnapsToDevicePixels' Value='True'/>
+    <Setter Property='Template'>
+      <Setter.Value>
+        <ControlTemplate TargetType='Button'>
+          <Grid>
+            <Border x:Name='bd' Background='#1A64B5F6' BorderBrush='#6664B5F6' BorderThickness='1' CornerRadius='11'/>
+            <ContentPresenter HorizontalAlignment='Center' VerticalAlignment='Center' Margin='0,0,0,1'
+                              TextElement.Foreground='{TemplateBinding Foreground}'/>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property='IsMouseOver' Value='True'><Setter TargetName='bd' Property='Background' Value='#3364B5F6'/></Trigger>
+            <Trigger Property='IsPressed' Value='True'><Setter TargetName='bd' Property='Background' Value='#4D64B5F6'/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
   <Style x:Key='Chip' TargetType='Button' BasedOn='{StaticResource Btn}'>
     <Setter Property='FontFamily' Value='Cascadia Mono, Consolas'/>
     <Setter Property='FontWeight' Value='Normal'/>

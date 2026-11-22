@@ -63,7 +63,9 @@ the MSI can't copy the plugin there: use the one-liner instead, which then asks 
 
 Restart SimHub and accept enabling **AI Race Engineer**: it shows up in the left menu (otherwise: Settings → Plugins).
 Everything is set on its page (in French for now; the engineer itself speaks French or English). At the top,
-a status bar shows the AI, the voice client, push-to-talk and the game, with what is left to do:
+a status bar shows the AI, the voice client, push-to-talk and the game, with what is left to do. A welcome window
+sums up the choices on first start (the ? at the top of the page reopens it), and the ? next to each AI and next to
+ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it costs.
 
 - **Language and voice**: French or English (defaults to your Windows language), then the voice engine:
   - **Online** (default): Microsoft neural voices, free and very natural (Henri, Denise, Rémy, Antoine
@@ -98,7 +100,7 @@ the "Client vocal" box shows the cause, and the "Journal" (Log) button opens its
 of its page: click "Installer" (Install). The new version is prepared in your profile and replaces the old one
 when SimHub closes (the plugin offers to restart it right away), after its fingerprint is checked.
 No Windows permission prompt, unless SimHub's folder is protected: it is then asked for on every update.
-The voice client is updated at the same time.
+The voice client is updated at the same time. What changed in each version: [CHANGELOG.md](CHANGELOG.md).
 
 **Performance**: the plugin is built to leave the machine to the game.
 - The voice client runs at "below normal" priority, and speech recognition uses at most half of the cores (4 max).
@@ -142,6 +144,7 @@ plugin/                 SimHub plugin (C#, .NET Framework 4.8)
   SettingsControl.cs      the plugin page in SimHub
   Theme.cs                page theme (colours, buttons, toggles, segments)
   ClientRunner.cs         runs the voice client in the background (and sets it up on first start)
+  Guides.cs               welcome window and the ? guide for each AI
   SnapshotServer.cs       small HTTP server on 127.0.0.1:8889
   Updater.cs              updates from GitHub releases
   LlmTester.cs            "Test connection" button

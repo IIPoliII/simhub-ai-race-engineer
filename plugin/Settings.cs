@@ -60,7 +60,7 @@ namespace AIRaceEngineer
                 Id = "claude", Name = "Claude", Tagline = "Anthropic · très bon en français",
                 Models = new[] { "claude-haiku-5-5", "claude-sonnet-5-5" },
                 KeyHelp = "Clé API de la console Anthropic.",
-                KeyHelpUrl = "https://console.anthropic.com/settings/keys",
+                KeyHelpUrl = "https://platform.claude.com/settings/keys",
                 BaseUrl = p => "https://api.anthropic.com/v1/",
             },
             new ProviderInfo
@@ -138,6 +138,7 @@ namespace AIRaceEngineer
 
         public bool AutoStartClient { get; set; } = true;
         public bool PttTested { get; set; }
+        public bool WelcomeShown { get; set; }   // fenêtre de bienvenue déjà montrée au premier démarrage
 
         public ProviderSettings Current(string id = null)
         {

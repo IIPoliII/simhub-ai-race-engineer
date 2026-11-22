@@ -117,6 +117,7 @@ namespace AIRaceEngineer
             Updater.CheckStaged();
             Updater.InstallFinished += OfferRestart;
             Updater.CheckAsync(); // en arrière-plan, n'installe rien sans clic
+            if (!Settings.WelcomeShown) ShowWelcomeWhenReady();
         }
 
         public void End(PluginManager pluginManager)
@@ -147,6 +148,35 @@ namespace AIRaceEngineer
             {
                 SimHub.Logging.Current.Warn("[AI Race Engineer] watchdog : " + ex.Message);
             }
+        }
+
+        // ---------- Bienvenue, au premier démarrage ----------
+
+        /// <summary>Une seule fois par processus : SimHub peut créer deux instances du plugin.</summary>
+        private static bool _welcomeOpened;
+
+        /// <summary>Montre la bienvenue une fois la fenêtre de SimHub affichée (pas pendant le chargement, ni s'il démarre réduit).</summary>
+        private void ShowWelcomeWhenReady()
+        {
+            var app = System.Windows.Application.Current;
+            if (app == null) return;
+            app.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                var timer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(3) };
+                timer.Tick += (s, e) =>
+                {
+                    var main = app.MainWindow;
+                    if (main == null || !main.IsVisible || main.WindowState == System.Windows.WindowState.Minimized) return;
+                    timer.Stop();
+                    if (_welcomeOpened || Settings.WelcomeShown) return;
+                    _welcomeOpened = true;
+                    Settings.WelcomeShown = true;
+                    SettingsChanged();
+                    try { GuideWindows.ShowWelcome(activate: false); }
+                    catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] bienvenue : " + ex.Message); }
+                };
+                timer.Start();
+            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
         }
 
         // ---------- Redémarrage de SimHub après une mise à jour ----------

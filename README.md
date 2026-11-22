@@ -36,8 +36,8 @@ L'installateur :
 2. installe le client vocal dans `%LOCALAPPDATA%\AIRaceEngineer`, avec [uv](https://docs.astral.sh/uv/) et Python
    si besoin, puis télécharge la voix et la reconnaissance vocale (~1 Go la première fois) ;
 3. attend que SimHub soit fermé et copie le plugin. En général sans droits admin : l'installateur de SimHub laisse
-   les utilisateurs écrire dans son dossier. Sinon Windows demande l'autorisation, une seule fois : l'installateur
-   donne alors à ton compte le droit de réécrire ce seul fichier (`AIRaceEngineer.dll`), pour les mises à jour.
+   les utilisateurs écrire dans son dossier. Si ce dossier est protégé, Windows demande l'autorisation
+   (les droits du dossier ne sont jamais modifiés).
 
 Rien à compiler, rien à configurer en ligne de commande.
 
@@ -78,8 +78,9 @@ Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il 
 
 **Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, un bandeau apparaît en haut
 de sa page : clique sur « Installer ». La nouvelle version est préparée dans ton profil, et elle remplace l'ancienne
-quand SimHub se ferme (le plugin propose de le redémarrer tout de suite). Pas de demande d'autorisation Windows
-(sauf, une seule fois, si ton compte n'a pas le droit d'écrire dans le dossier de SimHub). Le client vocal
+quand SimHub se ferme (le plugin propose de le redémarrer tout de suite), après vérification de son empreinte.
+Pas de demande d'autorisation Windows, sauf si le dossier de SimHub est protégé : elle est alors demandée à chaque
+mise à jour. Le client vocal
 est mis à jour en même temps.
 
 **Performances** : le plugin est fait pour laisser la machine au jeu.

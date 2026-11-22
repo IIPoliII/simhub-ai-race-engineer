@@ -14,10 +14,10 @@ namespace AIRaceEngineer
     /// <summary>
     /// Vérifie la dernière release GitHub et installe la nouvelle DLL.
     ///
-    /// SimHub est dans Program Files : la première installation demande les droits admin, et en profite pour
-    /// donner à l'utilisateur le droit d'écrire sur ce seul fichier (AIRaceEngineer.dll). Ensuite, les mises à jour
-    /// se font sans admin : la nouvelle DLL est préparée dans le profil, puis recopiée par-dessus l'ancienne
-    /// quand SimHub se ferme (tant qu'il tourne, la DLL chargée est verrouillée).
+    /// L'installateur de SimHub laisse d'habitude les utilisateurs écrire dans son dossier : la mise à jour se fait alors
+    /// sans admin. La nouvelle DLL est préparée dans le profil, puis recopiée par-dessus l'ancienne quand SimHub se ferme
+    /// (tant qu'il tourne, la DLL chargée est verrouillée), après vérification de son empreinte SHA-256.
+    /// Si le dossier est protégé, on demande l'admin à chaque mise à jour, sans jamais assouplir ses droits.
     /// </summary>
     public sealed class Updater
     {
@@ -33,6 +33,8 @@ namespace AIRaceEngineer
         public bool Staged { get; private set; }
         public static string StagedDll => Path.Combine(EngineerSettings.DataDir, "update", AssetName);
         private bool _stagedFailed;
+        /// <summary>Empreinte de la DLL préparée : le script de fermeture ne recopie qu'un fichier identique.</summary>
+        private static string _stagedHash;
         public bool UpdateAvailable => !Installed && Latest != null && Latest > Current;
         /// <summary>Déclenché quand la nouvelle version est copiée : il reste à redémarrer SimHub.</summary>
         public event Action InstallFinished;
@@ -63,9 +65,16 @@ namespace AIRaceEngineer
             catch (IOException) { return true; }
         }
 
+        private static string Sha256(byte[] bytes)
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+                return BitConverter.ToString(sha.ComputeHash(bytes)).Replace("-", "");
+        }
+
         /// <summary>
-        /// Script PowerShell, sans admin : attend la fermeture de SimHub, recopie la DLL préparée par-dessus l'ancienne
-        /// (en gardant l'ancienne en mémoire pour la remettre si la copie échoue), puis relance SimHub si demandé.
+        /// Script PowerShell, sans admin : attend la fermeture de SimHub, vérifie que la DLL préparée est bien celle
+        /// téléchargée et contrôlée (même empreinte), la recopie par-dessus l'ancienne (gardée en mémoire pour la remettre
+        /// si la copie échoue), puis relance SimHub si demandé. Sans DLL préparée dans cette session, il ne copie rien.
         /// </summary>
         public static string ExitScript(int pid, string simhubExe, bool restart)
         {
@@ -73,9 +82,11 @@ namespace AIRaceEngineer
             var target = typeof(Updater).Assembly.Location;
             return
                 $"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p) {{ $p.WaitForExit(120000) | Out-Null }}; " +
-                $"$s = {Q(StagedDll)}; $t = {Q(target)}; " +
-                "if (Test-Path $s) { for ($i = 0; $i -lt 20; $i++) { try { " +
-                "$new = [IO.File]::ReadAllBytes($s); $fs = [IO.File]::Open($t, 'Open', 'ReadWrite', 'None'); " +
+                $"$s = {Q(StagedDll)}; $t = {Q(target)}; $h = {Q(_stagedHash ?? "")}; " +
+                "if ($h -and (Test-Path $s)) { for ($i = 0; $i -lt 20; $i++) { try { " +
+                "$new = [IO.File]::ReadAllBytes($s); " +
+                "$sha = [Security.Cryptography.SHA256]::Create(); if ([BitConverter]::ToString($sha.ComputeHash($new)).Replace('-', '') -ne $h) { Remove-Item $s -Force; break }; " +
+                "$fs = [IO.File]::Open($t, 'Open', 'ReadWrite', 'None'); " +
                 "try { $old = New-Object byte[] $fs.Length; [void]$fs.Read($old, 0, $old.Length); $fs.SetLength(0); $fs.Write($new, 0, $new.Length) } " +
                 "catch { $fs.SetLength(0); $fs.Write($old, 0, $old.Length); throw } finally { $fs.Close() }; " +
                 "Remove-Item $s -Force; break } catch { Start-Sleep -Milliseconds 500 } } }; " +
@@ -167,7 +178,9 @@ namespace AIRaceEngineer
             {
                 // Sans admin : la DLL attend dans le profil et sera copiée à la fermeture de SimHub
                 Directory.CreateDirectory(Path.GetDirectoryName(StagedDll));
-                File.Copy(downloaded, StagedDll, true);
+                var bytes = File.ReadAllBytes(downloaded);
+                File.WriteAllBytes(StagedDll, bytes);
+                _stagedHash = Sha256(bytes);
                 UpdateClient(client, clientZip);
                 Staged = Installed = true;
                 State = $"Version {Latest} prête : elle s'installe au redémarrage de SimHub.";
@@ -175,10 +188,7 @@ namespace AIRaceEngineer
                 return;
             }
 
-            State = "Installation : accepte la demande d'autorisation Windows (une seule fois)...";
-            // Droit d'écriture sur ce seul fichier pour l'utilisateur : les prochaines mises à jour se passeront de l'admin.
-            // Le SID est lu ici, hors admin : si l'admin est un autre compte, c'est quand même l'utilisateur qui reçoit le droit.
-            var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value;
+            State = "Installation : accepte la demande d'autorisation Windows...";
 
             string Q(string s) => "'" + s.Replace("'", "''") + "'";
             var script =
@@ -186,8 +196,7 @@ namespace AIRaceEngineer
                 $"$t = {Q(target)}; " +
                 "Remove-Item \"$t.old\" -Force -ErrorAction SilentlyContinue; " +
                 "Move-Item $t \"$t.old\" -Force; " +
-                $"Copy-Item {Q(downloaded)} $t -Force; " +
-                (sid == null ? "" : $"& icacls.exe $t /grant {Q("*" + sid + ":(M)")} | Out-Null");
+                $"Copy-Item {Q(downloaded)} $t -Force";
             var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 
             var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded)

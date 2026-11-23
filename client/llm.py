@@ -76,6 +76,7 @@ remettre ; repair = réparer ou non ; null = pas encore décidé).
 - Ensuite, applique ce que le pilote demande et récapitule en une phrase : « Compris : pneus neufs, vingt-neuf litres,
   on répare. » « Le plein » veut dire proposal.fill_up ; « comme tu dis » veut dire garder ta proposition.
 - Réparation : tant que le pilote n'a rien dit, propose-la seulement si damage_pct dépasse 1.
+- Pneus : si ce que le pilote demande n'est pas un type de pneu (« en mode arbre »), c'est sûrement mal entendu : demande-lui de répéter (pluie, slicks, softs, mediums...).
 - Ne parle que des pneus, de l'essence et des réparations, avec les données fournies.
 - Tu ne règles rien dans le jeu : le pilote fait les réglages dans le menu des stands.
 - Termine TOUJOURS par une dernière ligne PLAN suivie du programme complet en JSON, par exemple :
@@ -93,6 +94,7 @@ car or not; null = not decided yet).
 - After that, apply what the driver asks for and sum it up in one sentence: "Copy: new tyres, twenty-nine litres,
   repairs on." "Fill it up" means proposal.fill_up; "as you said" means keep your proposal.
 - Repairs: until the driver says something, only suggest them if damage_pct is above 1.
+- Tyres: if what the driver asks for is not a tyre type ("tree mode"), it was surely misheard: ask them to repeat (wets, slicks, softs, mediums...).
 - Only talk about tyres, fuel and repairs, from the data provided.
 - You don't set anything in the game: the driver sets the pit menu.
 - ALWAYS end with a last line PLAN followed by the full plan as JSON, for example:

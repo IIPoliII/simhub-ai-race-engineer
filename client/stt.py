@@ -9,10 +9,10 @@ from faster_whisper import WhisperModel  # noqa: E402
 # Vocabulaire de course pour aider Whisper sur les mots techniques
 # « Box, box ! Pit, pit. » écrits tels quels : sans eux, Whisper entendait « Bix, Bix », « Pete, Pete » ou « Bit, bit »
 HINTS = {
-    "fr": "Radio de course. Box, box ! Pit, pit. Je rentre au stand. Combien d'essence ? Pneus, carburant, écart, devant, "
-          "derrière, tour, stint, arrêt aux stands, pression, température, freins, dégâts.",
-    "en": "Race radio. Box, box! Pit, pit. Boxing this lap. How much fuel? Tyres, gap, ahead, behind, lap, stint, "
-          "pit stop, pressures, temperatures, brakes, damage.",
+    "fr": "Radio de course. Box, box ! Pit, pit. Je rentre au stand. Combien d'essence ? Pneus pluie, slicks, softs, "
+          "mediums, hards, inters, carburant, écart, devant, derrière, tour, stint, pression, température, freins, dégâts.",
+    "en": "Race radio. Box, box! Pit, pit. Boxing this lap. How much fuel? Wets, slicks, softs, mediums, hards, inters, "
+          "tyres, gap, ahead, behind, lap, stint, pit stop, pressures, temperatures, brakes, damage.",
 }
 # Mots poussés à chaque phrase (faster-whisper 1.0+)
 HOTWORDS = "box box, pit pit"

@@ -28,10 +28,10 @@ Jeu ──► SimHub ──► plugin AI Race Engineer (réglages, annonces, pus
 
 Deux façons, au choix. Les deux s'occupent de tout (Python, dépendances, modèles de voix) : rien à installer à la main.
 
-### Installateur Windows (MSI)
+### Installateur Windows
 
-Télécharge **`AIRaceEngineer-Setup-fr.msi`** depuis la [dernière release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
-(`-en` pour l'installateur en anglais) et double-clique dessus.
+Télécharge **`AIRaceEngineer-Setup.exe`** depuis la [dernière release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
+et double-clique dessus. Il demande la langue de l'installation (celle de ton Windows est présélectionnée ; anglais ou français).
 
 - Si SimHub est ouvert, l'installateur te demande de le fermer. À la fin, coche « Lancer SimHub ».
 - Au premier démarrage, le plugin installe la voix tout seul : [uv](https://docs.astral.sh/uv/), Python,
@@ -40,6 +40,9 @@ Télécharge **`AIRaceEngineer-Setup-fr.msi`** depuis la [dernière release](htt
   tes réglages sont gardés.
 - L'installateur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ».
   Clique « Informations complémentaires », puis « Exécuter quand même ».
+- Pour un déploiement silencieux, la release contient aussi **`AIRaceEngineer-Setup.msi`**, qui contient les deux langues
+  et prend celle de Windows : `msiexec /i AIRaceEngineer-Setup.msi /passive` (ajoute `ProductLanguage=1036` pour le
+  français ou `ProductLanguage=1033` pour l'anglais).
 
 ### En une ligne
 
@@ -56,7 +59,7 @@ la voix et la reconnaissance vocale, attend que SimHub soit fermé et copie le p
 ### Droits administrateur
 
 Pas besoin : l'installateur de SimHub laisse les utilisateurs écrire dans son dossier. Si ce dossier est protégé
-sur ta machine, le MSI ne pourra pas y copier le plugin : utilise la commande en une ligne, qui demande alors
+sur ta machine, l'installateur ne pourra pas y copier le plugin : utilise la commande en une ligne, qui demande alors
 l'autorisation Windows (les droits du dossier ne sont jamais modifiés).
 
 ## Réglages
@@ -154,11 +157,15 @@ client/                 Client vocal (Python)
   engineer.py             boucle principale (dialogue avec le plugin)
   stt.py / llm.py / tts.py / audio.py / ambience.py
   sample_snapshot.json    télémétrie d'exemple pour tester sans jeu
-installer/              Installateur MSI (WiX 5) : AIRaceEngineer.wxs, textes fr-FR.wxl / en-US.wxl
+installer/              Installateur Windows
+  AIRaceEngineer.wxs      MSI (WiX 5), textes en-US.wxl / fr-FR.wxl (les deux dans un seul MSI)
+  Setup/                  AIRaceEngineer-Setup.exe : choix de la langue, puis le MSI
+tools/CompatCheck/      vérifie qu'un plugin compilé se charge encore dans une version de SimHub
+.github/                GitHub Actions : compilation, releases, vérification quotidienne avec SimHub
 install.ps1             installateur en une ligne (dernière release)
 Installer-AIRaceEngineer.cmd   la même chose en double-clic
 dev-install.ps1         [dev] compile le plugin depuis les sources et l'installe
-release.ps1             [mainteneur] publie une release (DLL, client.zip, MSI FR/EN, installateur en une ligne)
+release.ps1             [mainteneur] construit tout et publie une release (lancé par GitHub Actions)
 ```
 
 ## Développement
@@ -173,9 +180,17 @@ uv run engineer.py --say "Box box, box box."
 uv run engineer.py --ask "il est à combien le mec devant ?" --snapshot sample_snapshot.json
 ```
 
-Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj`, commite, pousse, puis lance `.\release.ps1`
-(il construit aussi les deux MSI avec WiX, épinglé dans `dotnet-tools.json` ; `.\release.ps1 -MsiOnly` construit
-sans publier).
+Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj` et écris les notes dans `CHANGELOG.md` et
+`CHANGELOG.fr.md`. Ensuite, commite, pousse, puis pousse un tag `vX.Y.Z`. GitHub Actions :
+- compile le plugin avec la dernière version de SimHub ;
+- construit l'installateur (WiX, épinglé dans `dotnet-tools.json`) ;
+- publie la release.
+
+En local, `.\release.ps1 -BuildOnly` construit tout sans publier.
+
+Mises à jour de SimHub : chaque jour, GitHub Actions vérifie la dernière version de SimHub. Le plugin publié doit
+encore y trouver chaque type et chaque méthode qu'il utilise, et les sources doivent encore compiler. Sinon, une issue
+est ouverte sur le dépôt.
 
 ## Idées pour la suite
 

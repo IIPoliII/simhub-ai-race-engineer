@@ -1,0 +1,32 @@
+name: SimHub DLLs
+description: Installs a SimHub release on the runner (once per version, then cached) and puts its DLLs in simhub-ref/.
+inputs:
+  version:
+    description: SimHub version (a release tag of SHWotever/SimHub). Empty = the latest.
+    default: ''
+outputs:
+  version:
+    description: The SimHub version used.
+    value: ${{ steps.version.outputs.version }}
+runs:
+  using: composite
+  steps:
+    - id: version
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+        WANTED: ${{ inputs.version }}
+      run: |
+        $v = if ($env:WANTED) { $env:WANTED } else { gh release view -R SHWotever/SimHub --json tagName -q .tagName }
+        if (-not $v) { throw "Could not find SimHub's latest version." }
+        "version=$v" >> $env:GITHUB_OUTPUT
+    - id: cache
+      uses: actions/cache@v4
+      with:
+        path: simhub-ref
+        key: simhub-dlls-${{ steps.version.outputs.version }}
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: '& "${{ github.action_path }}/get-simhub.ps1" -Version "${{ steps.version.outputs.version }}" -Out simhub-ref'

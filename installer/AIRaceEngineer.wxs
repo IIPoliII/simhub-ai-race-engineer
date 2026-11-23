@@ -1,8 +1,9 @@
 <!--
-  Installateur MSI d'AI Race Engineer (WiX 5), construit par release.ps1 en français et en anglais :
+  Installateur MSI d'AI Race Engineer (WiX 5), construit par release.ps1 en anglais, avec le français
+  intégré en transformation de langue (Windows l'applique tout seul sur un Windows en français) :
     dotnet wix build installer\AIRaceEngineer.wxs -arch x64 -culture fr-FR -loc installer\fr-FR.wxl
       -ext WixToolset.UI.wixext -ext WixToolset.Util.wixext
-      -d Version=0.4.7 -d Root=<dépôt> -d Dll=<AIRaceEngineer.dll> -d ClientSrc=<fichiers du client>
+      -d Version=x.y.z -d ProductCode=<GUID> -d Root=<dépôt> -d Dll=<AIRaceEngineer.dll> -d ClientSrc=<fichiers du client>
 
   Par utilisateur, sans demande admin : le dossier de SimHub est d'habitude ouvert en écriture aux utilisateurs.
   - Le plugin va dans le dossier de SimHub (lu dans le registre, là où SimHub l'écrit).
@@ -19,6 +20,7 @@
   <Package Name="!(loc.ProductName)"
            Manufacturer="IIPoliII"
            Version="$(Version)"
+           ProductCode="$(ProductCode)"
            UpgradeCode="A228A2D8-BAAC-4221-99B1-239257A64C39"
            Scope="perUser"
            Language="!(loc.Lcid)">
@@ -72,6 +74,8 @@
       <Component Id="Data" Directory="AppDir" Guid="6E0F3D1C-5B2A-4C8E-9F47-2D1B8A6C3E90">
         <RegistryValue Root="HKCU" Key="Software\AIRaceEngineer" Name="ClientDir" Type="string" Value="[ClientDir]" KeyPath="yes" />
         <RegistryValue Root="HKCU" Key="Software\AIRaceEngineer" Name="UpdateDir" Type="string" Value="[UpdateDir]" />
+        <!-- Langue choisie à l'installation : langue de départ du plugin -->
+        <RegistryValue Root="HKCU" Key="Software\AIRaceEngineer" Name="Language" Type="string" Value="!(loc.LangCode)" />
         <!-- Pas pendant une mise à jour du MSI : on garde Python et les modèles déjà téléchargés -->
         <util:RemoveFolderEx On="uninstall" Property="CLIENTDIRREM" Condition="NOT UPGRADINGPRODUCTCODE" />
         <util:RemoveFolderEx On="uninstall" Property="UPDATEDIRREM" Condition="NOT UPGRADINGPRODUCTCODE" />

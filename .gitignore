@@ -9,10 +9,14 @@ __pycache__/
 client/models/
 
 # .NET
-plugin/bin/
-plugin/obj/
+bin/
+obj/
 .vs/
 *.user
 
 # WiX (extensions téléchargées par release.ps1)
 .wix/
+
+# CI (DLL de SimHub téléchargées pour compiler et vérifier)
+simhub-ref/
+published/

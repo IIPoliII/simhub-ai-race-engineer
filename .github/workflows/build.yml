@@ -1,0 +1,54 @@
+# Builds the plugin, the voice client and the installer (Setup.exe + MSI) against the latest SimHub.
+# - push (any branch) / pull request: build, and the files are attached to the run (Artifacts).
+# - tag vX.Y.Z: build, then publish the GitHub release (notes taken from CHANGELOG.md and CHANGELOG.fr.md).
+name: Build
+
+on:
+  push:
+    branches: ['**']
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: ${{ github.ref_type != 'tag' }}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            6.0.x
+            8.0.x
+
+      - id: simhub
+        uses: ./.github/actions/simhub
+
+      - name: Build${{ github.ref_type == 'tag' && ' and publish the release' || '' }}
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:GITHUB_REF_TYPE -eq "tag") { .\release.ps1 -SimHubDir simhub-ref }
+          else { .\release.ps1 -SimHubDir simhub-ref -BuildOnly }
+
+      - name: Plugin loads in this SimHub
+        shell: pwsh
+        run: dotnet run --project tools/CompatCheck -c Release -- plugin/bin/Release/AIRaceEngineer.dll simhub-ref
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AIRaceEngineer (SimHub ${{ steps.simhub.outputs.version }})
+          path: |
+            plugin/bin/Release/AIRaceEngineer.dll
+            plugin/bin/Release/client.zip
+            plugin/bin/Release/AIRaceEngineer-Setup.exe
+            plugin/bin/Release/AIRaceEngineer-Setup.msi

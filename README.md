@@ -28,10 +28,10 @@ Game ──► SimHub ──► AI Race Engineer plugin (settings, callouts, pus
 
 Two ways, pick one. Both take care of everything (Python, dependencies, voice models): nothing to install by hand.
 
-### Windows installer (MSI)
+### Windows installer
 
-Download **`AIRaceEngineer-Setup-en.msi`** from the [latest release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
-(`-fr` for the French installer) and double-click it.
+Download **`AIRaceEngineer-Setup.exe`** from the [latest release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
+and double-click it. It asks for the setup language (your Windows language is preselected; English or French).
 
 - If SimHub is open, the installer asks you to close it. At the end, tick "Launch SimHub".
 - On the first start, the plugin sets up the voice on its own: [uv](https://docs.astral.sh/uv/), Python,
@@ -40,6 +40,9 @@ Download **`AIRaceEngineer-Setup-en.msi`** from the [latest release](https://git
   your settings are kept.
 - The installer is not signed: Windows SmartScreen may show "Windows protected your PC".
   Click "More info", then "Run anyway".
+- For silent deployment, the release also has **`AIRaceEngineer-Setup.msi`**, which contains both languages and picks
+  the Windows one: `msiexec /i AIRaceEngineer-Setup.msi /passive` (add `ProductLanguage=1033` for English or
+  `ProductLanguage=1036` for French).
 
 ### One-liner
 
@@ -56,7 +59,7 @@ the voice and speech recognition, waits for SimHub to be closed and copies the p
 ### Administrator rights
 
 Not needed: SimHub's installer lets users write to its folder. If that folder is protected on your machine,
-the MSI can't copy the plugin there: use the one-liner instead, which then asks for Windows permission
+the installer can't copy the plugin there: use the one-liner instead, which then asks for Windows permission
 (the folder's permissions are never changed).
 
 ## Settings
@@ -153,11 +156,15 @@ client/                 Voice client (Python)
   engineer.py             main loop (talks to the plugin)
   stt.py / llm.py / tts.py / audio.py / ambience.py
   sample_snapshot.json    sample telemetry to test without a game
-installer/              MSI installer (WiX 5): AIRaceEngineer.wxs, texts fr-FR.wxl / en-US.wxl
+installer/              Windows installer
+  AIRaceEngineer.wxs      MSI (WiX 5), texts en-US.wxl / fr-FR.wxl (both in one MSI)
+  Setup/                  AIRaceEngineer-Setup.exe: setup language choice, then the MSI
+tools/CompatCheck/      checks that a built plugin still loads in a given SimHub version
+.github/                GitHub Actions: build, releases, daily SimHub compatibility check
 install.ps1             one-line installer (latest release)
 Installer-AIRaceEngineer.cmd   the same as a double-click
 dev-install.ps1         [dev] builds the plugin from source and installs it
-release.ps1             [maintainer] publishes a release (DLL, client.zip, FR/EN MSIs, one-line installer)
+release.ps1             [maintainer] builds everything and publishes a release (run by GitHub Actions)
 ```
 
 ## Development
@@ -172,9 +179,16 @@ uv run engineer.py --say "Box box, box box."
 uv run engineer.py --ask "what's the gap to the car ahead?" --snapshot sample_snapshot.json
 ```
 
-Publishing: bump `<Version>` in `plugin/AIRaceEngineer.csproj`, commit, push, then run `.\release.ps1`
-(it also builds both MSIs with WiX, pinned in `dotnet-tools.json`; `.\release.ps1 -MsiOnly` builds
-without publishing).
+Publishing: bump `<Version>` in `plugin/AIRaceEngineer.csproj` and write the notes in `CHANGELOG.md` and
+`CHANGELOG.fr.md`. Then commit, push, and push a `vX.Y.Z` tag. GitHub Actions then:
+- builds the plugin against the latest SimHub;
+- builds the installer (WiX, pinned in `dotnet-tools.json`);
+- publishes the release.
+
+Locally, `.\release.ps1 -BuildOnly` builds everything without publishing.
+
+SimHub updates: every day, GitHub Actions checks the latest SimHub release. The published plugin must still find every
+SimHub type and method it uses, and the source must still compile. If not, an issue is opened on the repository.
 
 ## Ideas for later
 

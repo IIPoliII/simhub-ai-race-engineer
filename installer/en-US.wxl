@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <WixLocalization Culture="en-US" Codepage="1252" xmlns="http://wixtoolset.org/schemas/v4/wxl">
   <String Id="Lcid" Value="1033" />
+  <String Id="LangCode" Value="en" />
   <String Id="ProductName" Value="AI Race Engineer for SimHub" />
   <String Id="Downgrade" Value="A newer version of AI Race Engineer is already installed." />
   <String Id="NoSimHub" Value="SimHub was not found. Install SimHub and start it once, then run this installer again." />

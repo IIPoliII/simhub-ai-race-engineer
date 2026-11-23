@@ -5,7 +5,6 @@ import io
 import os
 import re
 import shutil
-import stat
 import time
 import uuid
 from pathlib import Path
@@ -112,30 +111,27 @@ def _user_sid() -> str:
         kernel32.CloseHandle(token)
 
 
-def _owner_sid(path: Path) -> str:
+def _short_path(path: str) -> str | None:
+    """Chemin court 8.3 (C:\\Users\\JRME~1\\...), quand le volume en a : il reste dans le profil, rien à copier."""
     import ctypes
     from ctypes import wintypes
-    advapi32, kernel32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
-    advapi32.GetNamedSecurityInfoW.argtypes = [wintypes.LPCWSTR, ctypes.c_int, wintypes.DWORD,
-                                               ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p),
-                                               ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
-    advapi32.GetNamedSecurityInfoW.restype = wintypes.DWORD
-    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
-    SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION = 1, 1
-    owner, sd = ctypes.c_void_p(), ctypes.c_void_p()
-    err = advapi32.GetNamedSecurityInfoW(str(path), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, ctypes.byref(owner),
-                                         None, None, None, ctypes.byref(sd))
-    if err:
-        raise ctypes.WinError(err)
-    try:
-        return _sid_string(owner)
-    finally:
-        kernel32.LocalFree(sd)
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetShortPathNameW.argtypes = [wintypes.LPCWSTR, wintypes.LPWSTR, wintypes.DWORD]
+    kernel32.GetShortPathNameW.restype = wintypes.DWORD
+    buf = ctypes.create_unicode_buffer(32768)
+    n = kernel32.GetShortPathNameW(path, buf, len(buf))
+    return buf.value if 0 < n < len(buf) else None
+
+
+# Dossiers vérifiés, gardés ouverts jusqu'à la fin du processus sans partage en suppression : Windows refuse alors
+# de les renommer ou de les supprimer, personne ne peut mettre autre chose à leur place pendant qu'espeak les lit
+_held_dirs = []
 
 
 def _private_dir(path: Path, sid: str) -> bool:
     """Crée le dossier accessible à ce compte seul (plus SYSTEM et les administrateurs). S'il existe déjà, il doit
-    appartenir à ce compte (ou aux administrateurs) : sinon un autre compte du PC a pu y préparer ses fichiers."""
+    appartenir à ce compte (ou aux administrateurs) : sinon un autre compte du PC a pu y préparer ses fichiers.
+    Les vérifications portent sur le dossier ouvert (pas sur son chemin, qui pourrait changer entre-temps)."""
     import ctypes
     from ctypes import wintypes
     advapi32, kernel32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
@@ -143,10 +139,27 @@ def _private_dir(path: Path, sid: str) -> bool:
     class SECURITY_ATTRIBUTES(ctypes.Structure):
         _fields_ = [("nLength", wintypes.DWORD), ("lpSecurityDescriptor", ctypes.c_void_p), ("bInheritHandle", wintypes.BOOL)]
 
+    class BY_HANDLE_FILE_INFORMATION(ctypes.Structure):
+        _fields_ = [("dwFileAttributes", wintypes.DWORD), ("ftCreationTime", wintypes.FILETIME),
+                    ("ftLastAccessTime", wintypes.FILETIME), ("ftLastWriteTime", wintypes.FILETIME),
+                    ("dwVolumeSerialNumber", wintypes.DWORD), ("nFileSizeHigh", wintypes.DWORD),
+                    ("nFileSizeLow", wintypes.DWORD), ("nNumberOfLinks", wintypes.DWORD),
+                    ("nFileIndexHigh", wintypes.DWORD), ("nFileIndexLow", wintypes.DWORD)]
+
     advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
         wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.ULONG)]
+    advapi32.GetSecurityInfo.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.DWORD,
+                                         ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p),
+                                         ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    advapi32.GetSecurityInfo.restype = wintypes.DWORD
     kernel32.CreateDirectoryW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(SECURITY_ATTRIBUTES)]
+    kernel32.CreateFileW.argtypes = [wintypes.LPCWSTR, wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p,
+                                     wintypes.DWORD, wintypes.DWORD, wintypes.HANDLE]
+    kernel32.CreateFileW.restype = wintypes.HANDLE
+    kernel32.GetFileInformationByHandle.argtypes = [wintypes.HANDLE, ctypes.POINTER(BY_HANDLE_FILE_INFORMATION)]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
     kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+
     # Accès complet pour ce compte, SYSTEM et les administrateurs, rien d'hérité de ProgramData (« P »)
     sddl = f"D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
     sd = ctypes.c_void_p()
@@ -160,22 +173,57 @@ def _private_dir(path: Path, sid: str) -> bool:
                 raise ctypes.WinError(ctypes.get_last_error())
     finally:
         kernel32.LocalFree(sd)
-    st = os.lstat(path)  # sans suivre une jonction ou un lien posé à sa place
-    if not stat.S_ISDIR(st.st_mode) or st.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
-        return False
-    return _owner_sid(path) in (sid, "S-1-5-32-544", "S-1-5-18")  # ce compte, Administrateurs, SYSTEM
+
+    FILE_LIST_DIRECTORY, READ_CONTROL, FILE_READ_ATTRIBUTES = 0x0001, 0x00020000, 0x0080
+    FILE_SHARE_READ, FILE_SHARE_WRITE, OPEN_EXISTING = 0x1, 0x2, 3
+    FILE_FLAG_BACKUP_SEMANTICS, FILE_FLAG_OPEN_REPARSE_POINT = 0x02000000, 0x00200000
+    FILE_ATTRIBUTE_DIRECTORY, FILE_ATTRIBUTE_REPARSE_POINT = 0x10, 0x400
+    SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION = 1, 1
+    # Ouvert tel quel (une jonction n'est pas suivie), sans FILE_SHARE_DELETE. FILE_LIST_DIRECTORY est nécessaire :
+    # une ouverture sans accès aux données n'entre pas dans le contrôle de partage, elle n'empêcherait rien
+    handle = kernel32.CreateFileW(str(path), FILE_LIST_DIRECTORY | READ_CONTROL | FILE_READ_ATTRIBUTES,
+                                  FILE_SHARE_READ | FILE_SHARE_WRITE, None, OPEN_EXISTING,
+                                  FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT, None)
+    if handle in (None, wintypes.HANDLE(-1).value):
+        raise ctypes.WinError(ctypes.get_last_error())
+    keep = False
+    try:
+        info = BY_HANDLE_FILE_INFORMATION()
+        if not kernel32.GetFileInformationByHandle(handle, ctypes.byref(info)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        if not info.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY or info.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT:
+            return False
+        owner, osd = ctypes.c_void_p(), ctypes.c_void_p()
+        err = advapi32.GetSecurityInfo(handle, SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, ctypes.byref(owner),
+                                       None, None, None, ctypes.byref(osd))
+        if err:
+            raise ctypes.WinError(err)
+        try:
+            keep = _sid_string(owner) in (sid, "S-1-5-32-544", "S-1-5-18")  # ce compte, Administrateurs, SYSTEM
+        finally:
+            kernel32.LocalFree(osd)
+        return keep
+    finally:
+        if keep:
+            _held_dirs.append(handle)
+        else:
+            kernel32.CloseHandle(handle)
 
 
 def _espeak_data() -> str:
     """Dossier des données d'espeak (la phonétique de Kokoro).
     La DLL d'espeak lit ce chemin dans la page de code ANSI : avec des accents (C:\\Users\\Jérôme),
-    elle quitte tout le processus sans exception. On en garde alors une copie au chemin ASCII
-    C:\\ProgramData\\AIRaceEngineer-<SID du compte>, un dossier que les autres comptes du PC ne peuvent ni lire ni
-    modifier : espeak lit ces fichiers dans le processus du client, ils ne doivent venir que de nous."""
+    elle quitte tout le processus sans exception. On prend alors le chemin court 8.3 du dossier, sinon on en garde
+    une copie au chemin ASCII C:\\ProgramData\\AIRaceEngineer-<SID du compte>, un dossier que les autres comptes du
+    PC ne peuvent ni lire ni modifier : espeak lit ces fichiers dans le processus du client, ils ne doivent venir
+    que de nous."""
     import espeakng_loader
     src = espeakng_loader.get_data_path()
     if src.isascii():
         return src
+    short = _short_path(src)
+    if short and short.isascii():
+        return short
     ver = importlib.metadata.version("espeakng-loader")  # les données doivent aller avec la DLL
     try:
         sid = _user_sid()

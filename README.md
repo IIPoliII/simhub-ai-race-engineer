@@ -86,7 +86,8 @@ ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it c
 
   The **Listen** button next to the voice plays it; **Radio check** at the top of the page works with every engine,
   ElevenLabs included. Radio effect and fast or accurate recognition are optional. In French, **Swiss numbers**
-  has the engineer say septante, huitante, nonante (ticked by default when Windows is set to Switzerland).
+  has the engineer say septante, huitante, nonante (ticked by default when Windows is set to Switzerland,
+  where Ariane is also the default French voice).
 - **Track noise**: with the radio effect, F1 cars sometimes pass behind the engineer, like on the pit wall.
   Nothing is recorded: each car is synthesized for each message (revs, gear shifts, distance, Doppler effect),
   so it never sounds the same twice, and sometimes there is none. The background ducks when the engineer

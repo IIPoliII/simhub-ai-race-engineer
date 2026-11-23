@@ -186,7 +186,7 @@ namespace AIRaceEngineer
 
         // Voix
         public string TtsEngine { get; set; } = "neural"; // neural | kokoro | elevenlabs
-        public string NeuralVoiceFr { get; set; } = "fr-FR-HenriNeural";
+        public string NeuralVoiceFr { get; set; } = SwissRegion() ? "fr-CH-ArianeNeural" : "fr-FR-HenriNeural";
         public string NeuralVoiceEn { get; set; } = "en-GB-RyanNeural";
         public int SettingsVersion { get; set; } // absent des anciens fichiers = 0
         public string VoiceFr { get; set; } = "ff_siwis";
@@ -250,7 +250,7 @@ namespace AIRaceEngineer
         private static string BackupPath => FilePath + ".bak";   // version précédente, gardée à chaque enregistrement
         private static string BadPath => FilePath + ".bad";      // fichier illisible mis de côté
         private static string TempPath => FilePath + ".tmp";     // nouvelle version en cours d'enregistrement
-        private const int CurrentVersion = 3;                     // voir Migrate()
+        private const int CurrentVersion = 4;                     // voir Migrate()
 
         public static EngineerSettings Load()
         {
@@ -371,6 +371,8 @@ namespace AIRaceEngineer
                 oai.Model = ProviderInfo.Get("openai").DefaultModel;
             if (Providers.TryGetValue("cloudflare", out var cf) && cf.Model == "@cf/meta/llama-3.1-8b-instruct-fast")
                 cf.Model = ProviderInfo.Get("cloudflare").DefaultModel;
+            // 0.5.2 : en Suisse, la voix française par défaut devient Ariane (fr-CH), une seule fois
+            if (SettingsVersion < 4 && SwissRegion() && NeuralVoiceFr == "fr-FR-HenriNeural") NeuralVoiceFr = "fr-CH-ArianeNeural";
             SettingsVersion = CurrentVersion;
         }
 

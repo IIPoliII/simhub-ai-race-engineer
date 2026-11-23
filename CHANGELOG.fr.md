@@ -10,7 +10,8 @@ Tous les changements notables du projet sont notés ici. Le format suit
 ### Ajouté
 - Nombres à la suisse (en français, dans Langue et voix) : l'ingé dit septante, huitante, nonante, dans ses réponses
   comme dans les annonces, quelle que soit la voix. Coché d'office si Windows est réglé sur la Suisse.
-- Deux voix suisses parmi les voix en ligne : Fabrice et Ariane.
+- Deux voix suisses parmi les voix en ligne : Fabrice et Ariane. Quand Windows est réglé sur la Suisse, Ariane
+  devient la voix française par défaut (la mise à jour te la met si tu avais encore Henri).
 
 ### Corrigé
 - Au stand, l'ingé ne donne plus le chrono du tour en cours comme un temps au tour.

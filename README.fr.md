@@ -87,7 +87,8 @@ d'ElevenLabs ouvre un guide pas à pas : où créer le compte, quoi copier, comb
 
   Le bouton **Écouter** à côté de la voix la fait entendre ; **Radio check** en haut de la page marche avec tous
   les moteurs, ElevenLabs compris. Effet radio et reconnaissance rapide ou précise en option. **Nombres à la
-  suisse** fait dire septante, huitante, nonante (coché d'office si Windows est réglé sur la Suisse).
+  suisse** fait dire septante, huitante, nonante (coché d'office si Windows est réglé sur la Suisse,
+  où Ariane est aussi la voix française par défaut).
 - **Bruits de piste** : avec l'effet radio, des F1 passent parfois derrière l'ingé, comme au muret des stands.
   Rien n'est enregistré : chaque voiture est synthétisée à chaque message (régime, passages de rapport, distance,
   effet Doppler), donc jamais deux fois le même son, et parfois aucun. Le fond baisse quand l'ingé parle pour que

@@ -10,7 +10,8 @@ All notable changes to this project are documented here. The format follows
 ### Added
 - Swiss numbers (French only, in Language and voice): the engineer says septante, huitante, nonante, in its answers
   and in the callouts, whatever the voice. Ticked by default when Windows is set to Switzerland.
-- Two Swiss voices among the online voices: Fabrice and Ariane.
+- Two Swiss voices among the online voices: Fabrice and Ariane. When Windows is set to Switzerland, Ariane
+  becomes the default French voice (the update switches you to her if you still had Henri).
 
 ### Fixed
 - In the pits, the engineer no longer gives the running lap clock as a lap time.

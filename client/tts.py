@@ -5,6 +5,7 @@ import io
 import os
 import re
 import shutil
+import stat
 import time
 import uuid
 from pathlib import Path
@@ -71,23 +72,118 @@ class EspeakPathError(RuntimeError):
     """Données d'espeak inutilisables : la voix locale ne peut pas marcher sur ce PC."""
 
 
+def _sid_string(psid) -> str:
+    import ctypes
+    from ctypes import wintypes
+    advapi32, kernel32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32.ConvertSidToStringSidW.argtypes = [ctypes.c_void_p, ctypes.POINTER(wintypes.LPWSTR)]
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    s = wintypes.LPWSTR()
+    if not advapi32.ConvertSidToStringSidW(psid, ctypes.byref(s)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        return s.value
+    finally:
+        kernel32.LocalFree(ctypes.cast(s, ctypes.c_void_p))
+
+
+def _user_sid() -> str:
+    """SID du compte Windows qui lance le client (S-1-5-21-...) : toujours en ASCII, contrairement au nom."""
+    import ctypes
+    from ctypes import wintypes
+    advapi32, kernel32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.GetCurrentProcess.restype = wintypes.HANDLE
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    advapi32.OpenProcessToken.argtypes = [wintypes.HANDLE, wintypes.DWORD, ctypes.POINTER(wintypes.HANDLE)]
+    advapi32.GetTokenInformation.argtypes = [wintypes.HANDLE, ctypes.c_int, ctypes.c_void_p, wintypes.DWORD,
+                                             ctypes.POINTER(wintypes.DWORD)]
+    TOKEN_QUERY, TOKEN_USER = 0x0008, 1
+    token = wintypes.HANDLE()
+    if not advapi32.OpenProcessToken(kernel32.GetCurrentProcess(), TOKEN_QUERY, ctypes.byref(token)):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        size = wintypes.DWORD()
+        advapi32.GetTokenInformation(token, TOKEN_USER, None, 0, ctypes.byref(size))
+        buf = ctypes.create_string_buffer(size.value)
+        if not advapi32.GetTokenInformation(token, TOKEN_USER, buf, size, ctypes.byref(size)):
+            raise ctypes.WinError(ctypes.get_last_error())
+        return _sid_string(ctypes.c_void_p.from_buffer(buf).value)  # TOKEN_USER commence par le pointeur du SID
+    finally:
+        kernel32.CloseHandle(token)
+
+
+def _owner_sid(path: Path) -> str:
+    import ctypes
+    from ctypes import wintypes
+    advapi32, kernel32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+    advapi32.GetNamedSecurityInfoW.argtypes = [wintypes.LPCWSTR, ctypes.c_int, wintypes.DWORD,
+                                               ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(ctypes.c_void_p),
+                                               ctypes.c_void_p, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)]
+    advapi32.GetNamedSecurityInfoW.restype = wintypes.DWORD
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION = 1, 1
+    owner, sd = ctypes.c_void_p(), ctypes.c_void_p()
+    err = advapi32.GetNamedSecurityInfoW(str(path), SE_FILE_OBJECT, OWNER_SECURITY_INFORMATION, ctypes.byref(owner),
+                                         None, None, None, ctypes.byref(sd))
+    if err:
+        raise ctypes.WinError(err)
+    try:
+        return _sid_string(owner)
+    finally:
+        kernel32.LocalFree(sd)
+
+
+def _private_dir(path: Path, sid: str) -> bool:
+    """Crée le dossier accessible à ce compte seul (plus SYSTEM et les administrateurs). S'il existe déjà, il doit
+    appartenir à ce compte (ou aux administrateurs) : sinon un autre compte du PC a pu y préparer ses fichiers."""
+    import ctypes
+    from ctypes import wintypes
+    advapi32, kernel32 = ctypes.WinDLL("advapi32", use_last_error=True), ctypes.WinDLL("kernel32", use_last_error=True)
+
+    class SECURITY_ATTRIBUTES(ctypes.Structure):
+        _fields_ = [("nLength", wintypes.DWORD), ("lpSecurityDescriptor", ctypes.c_void_p), ("bInheritHandle", wintypes.BOOL)]
+
+    advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW.argtypes = [
+        wintypes.LPCWSTR, wintypes.DWORD, ctypes.POINTER(ctypes.c_void_p), ctypes.POINTER(wintypes.ULONG)]
+    kernel32.CreateDirectoryW.argtypes = [wintypes.LPCWSTR, ctypes.POINTER(SECURITY_ATTRIBUTES)]
+    kernel32.LocalFree.argtypes = [ctypes.c_void_p]
+    # Accès complet pour ce compte, SYSTEM et les administrateurs, rien d'hérité de ProgramData (« P »)
+    sddl = f"D:P(A;OICI;FA;;;{sid})(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)"
+    sd = ctypes.c_void_p()
+    if not advapi32.ConvertStringSecurityDescriptorToSecurityDescriptorW(sddl, 1, ctypes.byref(sd), None):
+        raise ctypes.WinError(ctypes.get_last_error())
+    try:
+        sa = SECURITY_ATTRIBUTES(ctypes.sizeof(SECURITY_ATTRIBUTES), sd, False)
+        if not kernel32.CreateDirectoryW(str(path), ctypes.byref(sa)):
+            ERROR_ALREADY_EXISTS = 183
+            if ctypes.get_last_error() != ERROR_ALREADY_EXISTS:
+                raise ctypes.WinError(ctypes.get_last_error())
+    finally:
+        kernel32.LocalFree(sd)
+    st = os.lstat(path)  # sans suivre une jonction ou un lien posé à sa place
+    if not stat.S_ISDIR(st.st_mode) or st.st_file_attributes & stat.FILE_ATTRIBUTE_REPARSE_POINT:
+        return False
+    return _owner_sid(path) in (sid, "S-1-5-32-544", "S-1-5-18")  # ce compte, Administrateurs, SYSTEM
+
+
 def _espeak_data() -> str:
     """Dossier des données d'espeak (la phonétique de Kokoro).
     La DLL d'espeak lit ce chemin dans la page de code ANSI : avec des accents (C:\\Users\\Jérôme),
-    elle quitte tout le processus sans exception. On en garde alors une copie au chemin ASCII."""
+    elle quitte tout le processus sans exception. On en garde alors une copie au chemin ASCII
+    C:\\ProgramData\\AIRaceEngineer-<SID du compte>, un dossier que les autres comptes du PC ne peuvent ni lire ni
+    modifier : espeak lit ces fichiers dans le processus du client, ils ne doivent venir que de nous."""
     import espeakng_loader
     src = espeakng_loader.get_data_path()
     if src.isascii():
         return src
     ver = importlib.metadata.version("espeakng-loader")  # les données doivent aller avec la DLL
-    for base in (os.environ.get("ProgramData") or r"C:\ProgramData", os.environ.get("PUBLIC") or r"C:\Users\Public"):
-        dst = Path(base) / "AIRaceEngineer" / f"espeak-ng-data-{ver}"
-        if not str(dst).isascii():
-            continue
-        try:
+    try:
+        sid = _user_sid()
+        root = Path(os.environ.get("ProgramData") or r"C:\ProgramData") / f"AIRaceEngineer-{sid}"
+        if str(root).isascii() and _private_dir(root, sid):
+            dst = root / f"espeak-ng-data-{ver}"
             if not (dst / "phontab").is_file():
-                dst.parent.mkdir(parents=True, exist_ok=True)
-                tmp = dst.with_name(f"{dst.name}.{uuid.uuid4().hex[:8]}.part")
+                tmp = root / f"{dst.name}.{uuid.uuid4().hex[:8]}.part"
                 shutil.copytree(src, tmp)
                 try:
                     tmp.rename(dst)  # d'un coup : jamais de copie à moitié faite
@@ -95,8 +191,8 @@ def _espeak_data() -> str:
                     shutil.rmtree(tmp, ignore_errors=True)  # un autre processus l'a faite avant
             if (dst / "phontab").is_file():
                 return str(dst)
-        except OSError:
-            continue
+    except OSError:
+        pass
     # espeak quitterait tout le processus : une exception, elle, est rattrapée et affichée
     raise EspeakPathError(_t("voix locale indisponible : le chemin du profil Windows contient des accents",
                              "local voice unavailable: the Windows profile path has non-ASCII characters"))

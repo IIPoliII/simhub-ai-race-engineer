@@ -41,7 +41,8 @@ is preselected, otherwise your Windows language). On a new install, it is also t
   your settings are kept. Shared folders stay, delete them by hand if nothing else uses them: the speech
   recognition models (~600 MB, `%USERPROFILE%\.cache\huggingface`) and uv (`%USERPROFILE%\.local\bin\uv.exe`,
   with its Python and cache in `%APPDATA%\uv` and `%LOCALAPPDATA%\uv`). With accents in your Windows user name,
-  the offline voice also keeps a copy of its phonetics data in `C:\ProgramData\AIRaceEngineer` (~20 MB).
+  the offline voice also keeps a copy of its phonetics data, readable by your account only, in
+  `C:\ProgramData\AIRaceEngineer-S-1-5-…` (~20 MB).
 - Repair: run `AIRaceEngineer-Setup.exe` again and choose Repair.
 - The installer is not signed: Windows SmartScreen may show "Windows protected your PC".
   Click "More info", then "Run anyway".

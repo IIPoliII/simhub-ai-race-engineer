@@ -43,7 +43,7 @@ du plugin.
   sert : les modèles de reconnaissance vocale (~600 Mo, `%USERPROFILE%\.cache\huggingface`) et uv
   (`%USERPROFILE%\.local\bin\uv.exe`, avec son Python et son cache dans `%APPDATA%\uv` et `%LOCALAPPDATA%\uv`).
   Avec des accents dans ton nom d'utilisateur Windows, la voix hors ligne garde aussi une copie de ses données de
-  phonétique dans `C:\ProgramData\AIRaceEngineer` (~20 Mo).
+  phonétique, lisible par ton compte seul, dans `C:\ProgramData\AIRaceEngineer-S-1-5-…` (~20 Mo).
 - Réparation : relance `AIRaceEngineer-Setup.exe` et choisis « Réparer ».
 - L'installateur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ».
   Clique « Informations complémentaires », puis « Exécuter quand même ».

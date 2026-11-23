@@ -2,6 +2,8 @@
 
 **English** · [Français](README.fr.md)
 
+![The plugin page in SimHub](docs/screenshot-en.png)
+
 A voice race engineer for **every game SimHub supports** (ACC, iRacing, LMU, rFactor 2, AC, F1...).
 Hold a button on your wheel, ask your question any way you like ("what's the gap to the car ahead?",
 "how are my tyres?", "do I have enough fuel?"), and the engineer answers over the radio. It also calls out

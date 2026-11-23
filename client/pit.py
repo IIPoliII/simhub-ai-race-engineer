@@ -22,6 +22,23 @@ CANCEL = re.compile(
     r"\bannul\w*\b.*\b(?:box|boxe|arrêt|stand)\b|\bon\s+reste\s+(?:dehors|en\s+piste)\b|\bpas\s+de\s+box\b"
     r"|\bcancel\b.*\b(?:box|stop|pit)\b|\bstay(?:ing)?\s+out\b|\bno\s+(?:box|stop)\b",
     re.I)
+# Pneus mal entendus par Whisper (small) pendant un arrêt : « hard » à la française devient « arbre »,
+# « mets des hards » devient « Mediards », « mediums neufs » devient « medium 9 »...
+TYRE_FIXES = [
+    (re.compile(r"\bm[eé]d(?:i|e|es)\s?(softs?|hards?)\b", re.I), r"mets des \1"),
+    (re.compile(r"\b(?:mediards?|mediar|medeards?)\b", re.I), "mets des hards"),
+    (re.compile(r"\barbres?\b", re.I), "hard"),
+    (re.compile(r"\bards\b", re.I), "hards"),
+    (re.compile(r"\b(mediums?|softs?|hards?|slicks?|pluie|inters?)\s+9\b", re.I), r"\1 neufs"),
+]
+
+
+def fix_tyre_words(question: str) -> str:
+    for pattern, repl in TYRE_FIXES:
+        question = pattern.sub(repl, question)
+    return question
+
+
 def normalize_call(question: str) -> str:
     """Remplace l'appel mal transcrit (« Bix, bix », « p't p't ») par « Box, box ! ». Ce qui précède l'appel est
     écarté (souvent du bruit : « on va tester »), ce qui suit est gardé (« box box, mets des softs »)."""
@@ -93,6 +110,31 @@ def fuel_proposal(snap: dict) -> dict:
     }
 
 
+_NUMBER_WORDS = {"dix": 10, "quinze": 15, "vingt": 20, "vingt-cinq": 25, "trente": 30, "quarante": 40, "cinquante": 50,
+                 "soixante": 60, "septante": 70, "huitante": 80, "nonante": 90, "cent": 100, "ten": 10, "fifteen": 15,
+                 "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
+                 "ninety": 90, "hundred": 100}
+_FUEL = re.compile(r"\b(\d{1,3}|" + "|".join(sorted(_NUMBER_WORDS, key=len, reverse=True)) + r")\s*(?:litres?|liters?|l|gallons?)\b", re.I)
+_FILL = re.compile(r"\b(?:le plein|plein d'essence|fill(?: it)? up|full tank)\b", re.I)
+_TYRE = re.compile(r"\b(softs?|mediums?|hards?|pluie|wets?|inters?|intermédiaires?|slicks?)\b", re.I)
+_NEW = re.compile(r"\b(?:neufs?|new|fresh)\b", re.I)
+
+
+def from_driver(question: str, fill_up) -> dict:
+    """Essence et pneus dits par le pilote, quand l'IA n'a pas renvoyé son programme."""
+    data = {}
+    m = _FUEL.search(question)
+    if m:
+        word = m.group(1).lower()
+        data["fuel"] = int(word) if word.isdigit() else _NUMBER_WORDS[word]
+    elif _FILL.search(question) and fill_up is not None:
+        data["fuel"] = fill_up
+    t = _TYRE.search(question)
+    if t:
+        data["tyres"] = t.group(1).lower() + (" neufs" if _NEW.search(question) else "")
+    return data
+
+
 class PitPlan:
     """Programme d'arrêt en cours. Partagé entre le fil de travail (questions) et la boucle principale (stands)."""
 
@@ -114,15 +156,21 @@ class PitPlan:
         with self.lock:
             return {"proposal": self.proposal, "plan": dict(self.plan)}
 
-    def absorb(self, answer: str) -> str:
-        """Retire la ligne PLAN de la réponse de l'IA et met le programme à jour. Renvoie le texte à dire."""
+    def absorb(self, answer: str, question: str = "") -> str:
+        """Retire la ligne PLAN de la réponse de l'IA et met le programme à jour. Renvoie le texte à dire.
+        Sans ligne PLAN (les petits modèles l'oublient parfois), on lit l'essence et les pneus dans la phrase du pilote."""
         m = PLAN_LINE.search(answer)
-        if not m:
-            return answer.strip()
-        try:
-            data = json.loads(m.group(1))
-        except ValueError:
-            data = {}
+        if m:
+            try:
+                data = json.loads(m.group(1))
+            except ValueError:
+                data = {}
+            spoken = answer[:m.start()].strip()
+            # Les mots du pilote passent avant le résumé de l'IA (« mode hard » ne doit pas devenir « neufs »)
+            data.update(from_driver(question, self.proposal.get("fill_up")))
+        else:
+            data = from_driver(question, self.proposal.get("fill_up"))
+            spoken = answer.strip()
         with self.lock:
             for key in ("tyres", "fuel", "repair"):
                 if key in data:
@@ -130,7 +178,7 @@ class PitPlan:
             fuel, most = self.plan.get("fuel"), self.proposal.get("fill_up")
             if isinstance(fuel, (int, float)) and not isinstance(fuel, bool) and most is not None and fuel > most:
                 self.plan["fuel"] = most  # jamais plus que ce que le réservoir peut prendre
-        return answer[:m.start()].strip()
+        return spoken
 
     def watch(self, snap: dict | None) -> tuple[str | None, bool]:
         """Appelé chaque seconde : (texte à dire ou None, programme terminé)."""
@@ -152,29 +200,39 @@ class PitPlan:
                      else "No stop: box cancelled."), True)
         return None, False
 
+    def summary(self) -> str:
+        """Récapitulatif quand l'IA n'a renvoyé que la ligne PLAN."""
+        fr = self.language == "fr"
+        items = self._items()
+        if not items:
+            return "Compris. Quels pneus ?" if fr else "Copy. Which tyres?"
+        return ("Compris. " if fr else "Copy. ") + " ".join(items)
+
     def reminder(self) -> str:
+        fr = self.language == "fr"
+        return " ".join(["Box, box."] + self._items() + ["Limiteur !" if fr else "Pit limiter!"])
+
+    def _items(self) -> list[str]:
+        """Ce qui est décidé : pneus, essence, réparation (rien sur ce qui reste à choisir)."""
         fr = self.language == "fr"
         with self.lock:
             plan = dict(self.plan)
-        unit = (self.proposal.get("unit") or "").lower()
-        gallons = unit.startswith("gal")
-        parts = ["Box, box." if fr else "Box, box."]
+        gallons = (self.proposal.get("unit") or "").lower().startswith("gal")
+        items = []
         tyres = plan.get("tyres")
         if tyres:
-            parts.append(f"Pneus : {tyres}." if fr else f"Tyres: {tyres}.")
+            items.append(f"Pneus : {tyres}." if fr else f"Tyres: {tyres}.")
         fuel = plan.get("fuel")
         if isinstance(fuel, (int, float)) and not isinstance(fuel, bool):
             n = int(round(fuel))
+            unit = "gallons" if gallons else "litres"
             if n <= 0:
-                parts.append("Pas d'essence." if fr else "No fuel.")
-            elif fr:
-                parts.append(f"Essence : {n} {'gallons' if gallons else 'litres'}.")
+                items.append("Pas d'essence." if fr else "No fuel.")
             else:
-                parts.append(f"Fuel: {n} {'gallons' if gallons else 'litres'}.")
+                items.append(f"Essence : {n} {unit}." if fr else f"Fuel: {n} {unit}.")
         if plan.get("repair"):
-            parts.append("On répare." if fr else "Repairs on.")
-        parts.append("Limiteur !" if fr else "Pit limiter!")
-        return " ".join(parts)
+            items.append("On répare." if fr else "Repairs on.")
+        return items
 
 
 def cancelled(language: str) -> str:

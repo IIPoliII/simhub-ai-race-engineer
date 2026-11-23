@@ -5,6 +5,17 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.5] - 2026-11-23
+
+### Fixed
+- "Box box": tyre names are better understood ("hard" said in French was heard as "arbre", "mets des hards" as
+  "Mediards"), and a tyre choice that makes no sense gets asked again instead of being accepted. The engineer no
+  longer picks the tyres for you.
+- "Box box": the fuel and tyres you say are kept even when the AI forgets to note them, and your own words win over
+  its summary.
+- The engineer's answers no longer contain markdown asterisks, and an answer that came back empty during a stop is
+  replaced by a summary of the plan.
+
 ## [0.5.4] - 2026-11-23
 
 ### Fixed
@@ -231,6 +242,7 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.5.5]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.1...v0.5.2

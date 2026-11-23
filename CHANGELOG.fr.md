@@ -5,6 +5,17 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.5.5] - 2026-11-23
+
+### Corrigé
+- « Box box » : les noms de pneus sont mieux compris (« hard » était entendu « arbre », « mets des hards »
+  « Mediards »), et un choix de pneus qui n'a pas de sens est redemandé au lieu d'être accepté. L'ingé ne choisit
+  plus les pneus à ta place.
+- « Box box » : l'essence et les pneus que tu annonces sont gardés même quand l'IA oublie de les noter, et tes mots
+  passent avant son résumé.
+- Les réponses de l'ingé ne contiennent plus d'astérisques de mise en forme, et une réponse vide pendant un arrêt
+  est remplacée par le récapitulatif du programme.
+
 ## [0.5.4] - 2026-11-23
 
 ### Corrigé
@@ -238,6 +249,7 @@ Tous les changements notables du projet sont notés ici. Le format suit
 - Première version : plugin SimHub avec télémétrie JSON, client vocal Python (Whisper local, IA, voix), push-to-talk.
 - Installateur en une ligne et mises à jour depuis SimHub.
 
+[0.5.5]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.1...v0.5.2

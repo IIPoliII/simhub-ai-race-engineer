@@ -257,6 +257,8 @@ class Engine:
             self.pit = pit.PitPlan(snap, language)  # nouvel appel : programme repris de zéro
             # Whisper écrit parfois « Bix, bix » : l'IA, elle, doit voir l'appel tel que le pilote l'a dit
             question = pit.normalize_call(question)
+        if self.pit:
+            question = pit.fix_tyre_words(question)
         try:
             answer, t_llm = timed(self.engineer.ask, question, snap, self.pit)
             self.ai_issue = None

@@ -28,11 +28,12 @@ namespace AIRaceEngineer
         private DateTime _startedAt;
         private string _lastLine;
 
-        public string LastError { get; private set; }
+        private Msg _lastError, _setupStep;
+        public string LastError => _lastError;
         /// <summary>Étape de la première mise en route en cours, sinon null.</summary>
-        public string SetupStep { get; private set; }
+        public string SetupStep => _setupStep;
         /// <summary>Dernière ligne de la mise en route (ex. « Téléchargement de la voix : 40 % »).</summary>
-        public string SetupDetail => SetupStep != null ? _lastLine : null;
+        public string SetupDetail => _setupStep != null ? _lastLine : null;
         /// <summary>Écrit dans le .venv par « engineer.py --prepare » quand Python et les modèles sont prêts :
         /// une mise en route interrompue reprend au démarrage suivant.</summary>
         private static string PreparedMarker => Path.Combine(ClientDir, ".venv", "air-prepared");
@@ -63,7 +64,7 @@ namespace AIRaceEngineer
 
                 if (!Installed)
                 {
-                    Fail($"Client vocal introuvable ({ClientDir}). Lance l'installateur.");
+                    Fail(new Msg($"Client vocal introuvable ({ClientDir}). Lance l'installateur.", $"Voice client not found ({ClientDir}). Run the installer."));
                     return;
                 }
                 var uv = FindUv();
@@ -72,20 +73,20 @@ namespace AIRaceEngineer
                 {
                     // uv (le gestionnaire Python d'Astral) installe ensuite Python lui-même, sans droits admin
                     _phase = Phase.InstallUv;
-                    SetupStep = "Première mise en route (1/2) : installation de uv, le gestionnaire Python";
+                    _setupStep = new Msg("Première mise en route (1/2) : installation de uv, le gestionnaire Python", "First-time setup (1/2): installing uv, the Python manager");
                     psi = new ProcessStartInfo("powershell.exe",
                         "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"irm https://astral.sh/uv/install.ps1 | iex\"");
                 }
                 else if (!File.Exists(PreparedMarker))
                 {
                     _phase = Phase.Prepare;
-                    SetupStep = "Première mise en route (2/2) : Python, dépendances et modèles de voix (~1 Go, quelques minutes)";
+                    _setupStep = new Msg("Première mise en route (2/2) : Python, dépendances et modèles de voix (~1 Go, quelques minutes)", "First-time setup (2/2): Python, dependencies and voice models (~1 GB, a few minutes)");
                     psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --prepare");
                 }
                 else
                 {
                     _phase = Phase.Client;
-                    SetupStep = null;
+                    _setupStep = null;
                     psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --managed");
                 }
 
@@ -110,6 +111,8 @@ namespace AIRaceEngineer
                     psi.StandardErrorEncoding = Encoding.UTF8;
                     psi.EnvironmentVariables["PYTHONIOENCODING"] = "utf-8";
                     psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
+                    // Langue des messages de la mise en route (ensuite, le client suit la langue des réglages)
+                    psi.EnvironmentVariables["AIR_LANG"] = L10n.Language;
 
                     var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
                     process.OutputDataReceived += (s, e) => Log(e.Data);
@@ -117,7 +120,7 @@ namespace AIRaceEngineer
                     process.Exited += (s, e) => OnExited(process);
                     _process = process;
                     _startedAt = DateTime.UtcNow;
-                    LastError = null;
+                    _lastError = null;
                     process.Start();
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
@@ -126,8 +129,8 @@ namespace AIRaceEngineer
                 catch (Exception ex)
                 {
                     _process = null;
-                    SetupStep = null;
-                    Fail("Impossible de lancer le client : " + ex.Message);
+                    _setupStep = null;
+                    Fail(new Msg("Impossible de lancer le client : " + ex.Message, "Cannot start the client: " + ex.Message));
                 }
             }
         }
@@ -144,7 +147,7 @@ namespace AIRaceEngineer
                 if (_phase != Phase.Client)
                 {
                     var step = _phase;
-                    SetupStep = null;
+                    _setupStep = null;
                     if (code == 0)
                     {
                         // Étape réussie : on enchaîne (étape suivante, puis le client)
@@ -154,19 +157,22 @@ namespace AIRaceEngineer
                     }
                     QuickExits++;
                     Fail(step == Phase.InstallUv
-                        ? $"Installation de uv impossible (code {code}). Vérifie la connexion internet puis clique Démarrer."
-                        : $"Mise en route du client vocal impossible (code {code})" + (_lastLine != null ? " : " + _lastLine : ". Voir le journal."));
+                        ? new Msg($"Installation de uv impossible (code {code}). Vérifie la connexion internet puis clique Démarrer.",
+                                  $"Could not install uv (code {code}). Check the internet connection, then click Start.")
+                        : new Msg($"Mise en route du client vocal impossible (code {code})" + (_lastLine != null ? " : " + _lastLine : ". Voir le journal."),
+                                  $"Voice client setup failed (code {code})" + (_lastLine != null ? ": " + _lastLine : ". See the log.")));
                     return;
                 }
                 QuickExits = DateTime.UtcNow - _startedAt < QuickExit ? QuickExits + 1 : 0;
-                Fail($"Le client vocal s'est arrêté (code {code})" + (_lastLine != null ? " : " + _lastLine : "."));
+                Fail(new Msg($"Le client vocal s'est arrêté (code {code})" + (_lastLine != null ? " : " + _lastLine : "."),
+                             $"The voice client stopped (code {code})" + (_lastLine != null ? ": " + _lastLine : ".")));
             }
         }
 
-        private void Fail(string message)
+        private void Fail(Msg message)
         {
-            if (message != LastError) SimHub.Logging.Current.Warn("[AI Race Engineer] " + message);
-            LastError = message;
+            if (message.FrText != _lastError?.FrText) SimHub.Logging.Current.Warn("[AI Race Engineer] " + message.FrText);
+            _lastError = message;
         }
 
         public void Stop()
@@ -176,7 +182,7 @@ namespace AIRaceEngineer
             {
                 p = _process;
                 _process = null;
-                SetupStep = null;
+                _setupStep = null;
                 try { _log?.Dispose(); } catch { }
                 _log = null;
             }

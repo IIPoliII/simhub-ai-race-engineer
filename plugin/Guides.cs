@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Interop;
 using System.Windows.Media;
+using static AIRaceEngineer.L10n;
 
 namespace AIRaceEngineer
 {
@@ -17,8 +18,11 @@ namespace AIRaceEngineer
         public string Title, Summary, Cost, Note;
         public string[] Steps;
 
+        /// <summary>Guides dans la langue de la page.</summary>
+        public static Dictionary<string, Guide> All => L10n.Fr ? Fr : En;
+
         // Mise en forme légère dans les textes : [lien](https://...), `code`, « libellé d'un bouton »
-        public static readonly Dictionary<string, Guide> All = new Dictionary<string, Guide>
+        private static readonly Dictionary<string, Guide> Fr = new Dictionary<string, Guide>
         {
             ["infomaniak"] = new Guide
             {
@@ -109,6 +113,99 @@ namespace AIRaceEngineer
                 Note = "Sur le plan gratuit, certaines voix de la bibliothèque peuvent être refusées par l'API. Dans ce cas, garde George ou passe au plan Starter.",
             },
         };
+
+        // Mêmes guides en anglais : mêmes faits, mêmes liens, mêmes étapes
+        private static readonly Dictionary<string, Guide> En = new Dictionary<string, Guide>
+        {
+            ["infomaniak"] = new Guide
+            {
+                Title = "Infomaniak",
+                Summary = "Swiss host: the AI runs in their data centres in Switzerland.",
+                Cost = "1 million free credits to try it for a month, then pay as you go, billed monthly. " +
+                       "A question to the engineer uses a few thousand tokens: the free million covers hundreds of questions. " +
+                       "A bank card is requested when you order, to verify your identity.",
+                Steps = new[]
+                {
+                    "Order AI Tools on [shop.infomaniak.com](https://shop.infomaniak.com/order2/ai-tools): sign in or create an Infomaniak account, then confirm the order (free to start).",
+                    "Open AI Tools in the [Manager](https://manager.infomaniak.com/v3/ng/products/cloud/ai-tools) and copy your product's Product ID (a number). Paste it into the Product ID field.",
+                    "On the [API tokens page](https://manager.infomaniak.com/v3/ng/profile/user/token/list), click « Create a token », choose the AI Tools application (scope `ai-tools`), then confirm with your password.",
+                    "Copy the token right away (it won't be shown again) and paste it into API key.",
+                    "Keep the recommended model and click « Test connection ».",
+                },
+            },
+            ["cloudflare"] = new Guide
+            {
+                Title = "Cloudflare",
+                Summary = "Workers AI, Cloudflare's AI. Nothing to pay as long as you stay within the free quota.",
+                Cost = "Free: 10,000 neurons (Cloudflare's unit) per day, reset every day at 00:00 UTC. With the recommended model, " +
+                       "that's about a hundred questions a day (more with the 8B model). Beyond that, the engineer stops answering " +
+                       "questions until the next day; automatic callouts keep going.",
+                Steps = new[]
+                {
+                    "Create a free account on [dash.cloudflare.com](https://dash.cloudflare.com/sign-up).",
+                    "Open [Workers AI](https://dash.cloudflare.com/?to=/:account/ai/workers-ai) and click « Use REST API ».",
+                    "Click « Create a Workers AI API Token », check the pre-filled details, then « Create API Token » and « Copy API Token ». Paste the token into API key.",
+                    "On the same page, under « Get Account ID », copy the Account ID and paste it into the Account ID field.",
+                    "Click « Test connection ».",
+                },
+            },
+            ["openai"] = new Guide
+            {
+                Title = "OpenAI",
+                Summary = "The GPT models, pay as you go, no subscription.",
+                Cost = "Prepaid credits: $5 minimum, valid for one year. With gpt-4.1-mini, a question costs less than a tenth of a cent. " +
+                       "A ChatGPT subscription doesn't count: the API is paid separately.",
+                Steps = new[]
+                {
+                    "Create an account on [platform.openai.com](https://platform.openai.com/signup).",
+                    "In [Billing](https://platform.openai.com/settings/organization/billing/overview), add a payment method and buy credits.",
+                    "On the [API keys](https://platform.openai.com/api-keys) page, click « Create new secret key », copy the key (it is shown only once) and paste it into API key.",
+                    "Keep `gpt-4.1-mini` (fast and cheap) and click « Test connection ».",
+                },
+            },
+            ["claude"] = new Guide
+            {
+                Title = "Claude",
+                Summary = "Anthropic's models, very good in French. Pay as you go, no subscription.",
+                Cost = "Prepaid credits, bought in the Claude Console (the minimum is shown when you buy). " +
+                       "A Claude.ai subscription doesn't count: the API is paid separately.",
+                Steps = new[]
+                {
+                    "Create an account on the [Claude Console](https://platform.claude.com).",
+                    "In Settings → Billing, click « Buy credits ».",
+                    "In [API keys](https://platform.claude.com/settings/keys), click « Create key », give it a name, then copy it (it starts with `sk-ant-` and is shown only once). Paste it into API key.",
+                    "Keep `claude-haiku-5-5` (the fastest) and click « Test connection ».",
+                },
+            },
+            ["custom"] = new Guide
+            {
+                Title = "AI on your PC (Ollama)",
+                Summary = "Free and no account needed, but it uses your graphics card while you play.",
+                Cost = "Free. Pick a small model (3 to 4 billion parameters) to keep your FPS: `qwen3:4b` or `llama3.2:3b`.",
+                Steps = new[]
+                {
+                    "Install [Ollama](https://ollama.com/download).",
+                    "In a terminal, download a model: `ollama pull qwen3:4b`.",
+                    "Leave the URL `http://localhost:11434/v1`, no key, enter the same model name (`qwen3:4b`) and click « Test connection ».",
+                },
+                Note = "LM Studio works too: start its local server and use the URL `http://localhost:1234/v1`.",
+            },
+            ["elevenlabs"] = new Guide
+            {
+                Title = "ElevenLabs",
+                Summary = "By far the most realistic voice. It takes a bit of work: an account, an API key and choosing a voice.",
+                Cost = "The free plan (10,000 credits a month, personal use) is enough to try it, not to race regularly: " +
+                       "the Starter plan costs $6 a month. The plugin uses the Flash model, the cheapest in credits.",
+                Steps = new[]
+                {
+                    "Create an account on [elevenlabs.io](https://elevenlabs.io/app/sign-up).",
+                    "Create a key on the [API keys](https://elevenlabs.io/app/settings/api-keys) page. You can restrict it to speech synthesis (Text to Speech) and give it a credit limit. Copy it and paste it into API key.",
+                    "Pick a voice in the [library](https://elevenlabs.io/app/voice-library), add it to your voices and copy its Voice ID. Paste it into the Voice ID field (default: George, a British voice).",
+                    "Click « Radio check » at the top of the page to hear it.",
+                },
+                Note = "On the free plan, the API may refuse some library voices. If so, keep George or move to the Starter plan.",
+            },
+        };
     }
 
     /// <summary>Fenêtres de la page : bienvenue (au premier démarrage, puis bouton ?) et guides des fournisseurs.</summary>
@@ -117,11 +214,11 @@ namespace AIRaceEngineer
         public static void ShowGuide(string id)
         {
             if (!Guide.All.TryGetValue(id, out var g)) return;
-            Open("Configurer " + g.Title, w => BuildGuide(g, w), activate: true);
+            Open(T("Configurer ", "Set up ") + g.Title, w => BuildGuide(g, w), activate: true);
         }
 
         /// <param name="activate">false au démarrage de SimHub : la fenêtre ne doit pas voler le focus (un jeu en plein écran)</param>
-        public static void ShowWelcome(bool activate) => Open("Bienvenue", BuildWelcome, activate);
+        public static void ShowWelcome(bool activate) => Open(T("Bienvenue", "Welcome"), BuildWelcome, activate);
         public static void ShowWelcome() => ShowWelcome(true);
 
         public static FrameworkElement BuildGuide(string id, Action close) => BuildGuide(Guide.All[id], close);
@@ -130,42 +227,53 @@ namespace AIRaceEngineer
         {
             var body = new StackPanel();
             body.Children.Add(Para(g.Summary, "Text2", 13, 0, 16));
-            body.Children.Add(Heading("Ce que ça coûte"));
+            body.Children.Add(Heading(T("Ce que ça coûte", "What it costs")));
             body.Children.Add(Para(g.Cost, "Text", 13, 0, 18));
-            body.Children.Add(Heading("Étapes"));
+            body.Children.Add(Heading(T("Étapes", "Steps")));
             for (int i = 0; i < g.Steps.Length; i++) body.Children.Add(Step(i + 1, g.Steps[i]));
             if (g.Note != null) body.Children.Add(Para(g.Note, "Muted", 12, 6, 0));
-            return Root(g.Title, body, "Fermer", close);
+            return Root(g.Title, body, T("Fermer", "Close"), close);
         }
 
         public static FrameworkElement BuildWelcome(Action close)
         {
             var body = new StackPanel();
-            body.Children.Add(Para("Ton ingé de course à la radio. Il annonce tout seul tes temps, tes écarts, tes places et le carburant, " +
-                                   "et répond à tes questions quand tu maintiens un bouton du volant.", "Text2", 13, 0, 8));
-            body.Children.Add(Para("Au premier démarrage, le plugin installe la voix (quelques minutes) : l'avancement s'affiche dans la case Client vocal.", "Muted", 12, 0, 18));
+            body.Children.Add(Para(T("Ton ingé de course à la radio. Il annonce tout seul tes temps, tes écarts, tes places et le carburant, " +
+                                     "et répond à tes questions quand tu maintiens un bouton du volant.",
+                                     "Your race engineer on the radio. It calls out your lap times, gaps, positions and fuel on its own, " +
+                                     "and answers your questions while you hold a wheel button."), "Text2", 13, 0, 8));
+            body.Children.Add(Para(T("Au premier démarrage, le plugin installe la voix (quelques minutes) : l'avancement s'affiche dans la case Client vocal.",
+                                     "On first start, the plugin installs the voice (a few minutes): progress shows in the Voice client box."), "Muted", 12, 0, 18));
 
-            body.Children.Add(Heading("1. Choisis une IA"));
-            body.Children.Add(Para("C'est elle qui comprend tes questions et y répond avec la télémétrie. Les annonces automatiques n'en ont pas besoin : " +
-                                   "elles marchent déjà, sans internet. Plusieurs IA au choix, chacune avec son guide :", "Text", 13, 0, 8));
-            body.Children.Add(Choice("Infomaniak", "suisse, 1 million de crédits offerts pour commencer. Le choix par défaut.", "infomaniak"));
-            body.Children.Add(Choice("Cloudflare", "un quota gratuit chaque jour, sans rien payer.", "cloudflare"));
-            body.Children.Add(Choice("OpenAI", "payant à l'usage, quelques centimes par course.", "openai"));
-            body.Children.Add(Choice("Claude", "payant à l'usage, très bon en français.", "claude"));
-            body.Children.Add(Choice("Autre", "une IA sur ton PC (Ollama). Gratuite, mais elle prend de la carte graphique au jeu.", "custom"));
+            body.Children.Add(Heading(T("1. Choisis une IA", "1. Choose an AI")));
+            body.Children.Add(Para(T("C'est elle qui comprend tes questions et y répond avec la télémétrie. Les annonces automatiques n'en ont pas besoin : " +
+                                     "elles marchent déjà, sans internet. Plusieurs IA au choix, chacune avec son guide :",
+                                     "It understands your questions and answers them with the telemetry. Automatic callouts don't need it: " +
+                                     "they already work, without internet. Several AIs to choose from, each with its guide:"), "Text", 13, 0, 8));
+            body.Children.Add(Choice("Infomaniak", T("suisse, 1 million de crédits offerts pour commencer. Le choix par défaut.", "Swiss, 1 million free credits to start. The default choice."), "infomaniak"));
+            body.Children.Add(Choice("Cloudflare", T("un quota gratuit chaque jour, sans rien payer.", "a free quota every day, nothing to pay."), "cloudflare"));
+            body.Children.Add(Choice("OpenAI", T("payant à l'usage, quelques centimes par course.", "pay as you go, a few cents per race."), "openai"));
+            body.Children.Add(Choice("Claude", T("payant à l'usage, très bon en français.", "pay as you go, very good in French."), "claude"));
+            body.Children.Add(Choice(T("Autre", "Other"), T("une IA sur ton PC (Ollama). Gratuite, mais elle prend de la carte graphique au jeu.",
+                                                            "an AI on your PC (Ollama). Free, but it takes graphics card power away from the game."), "custom"));
 
-            body.Children.Add(Heading("2. La voix", 18));
-            body.Children.Add(Choice("En ligne", "par défaut. Voix Microsoft gratuites et naturelles, rien à régler.", null));
-            body.Children.Add(Choice("ElevenLabs", "de loin la plus réaliste, mais ça demande un peu de travail : un compte, une clé API et le choix d'une voix. " +
-                                                   "Payant au-delà de l'essai gratuit.", "elevenlabs"));
-            body.Children.Add(Choice("Hors ligne", "Kokoro, sans internet, moins naturelle en français.", null));
+            body.Children.Add(Heading(T("2. La voix", "2. The voice"), 18));
+            body.Children.Add(Choice(T("En ligne", "Online"), T("par défaut. Voix Microsoft gratuites et naturelles, rien à régler.", "the default. Free, natural Microsoft voices, nothing to set up."), null));
+            body.Children.Add(Choice("ElevenLabs", T("de loin la plus réaliste, mais ça demande un peu de travail : un compte, une clé API et le choix d'une voix. " +
+                                                     "Payant au-delà de l'essai gratuit.",
+                                                     "by far the most realistic, but it takes a bit of work: an account, an API key and choosing a voice. " +
+                                                     "Paid beyond the free trial."), "elevenlabs"));
+            body.Children.Add(Choice(T("Hors ligne", "Offline"), T("Kokoro, sans internet, moins naturelle en français.", "Kokoro, no internet, less natural in French."), null));
 
-            body.Children.Add(Heading("3. Le push-to-talk", 18));
-            body.Children.Add(Para("Dans SimHub, ouvre « Controls and events », ajoute un mapping avec l'action `AIRaceEnginePlugin.PushToTalk` " +
-                                   "et appuie sur le bouton de ton volant. La page du plugin indique quand le bouton est détecté.", "Text", 13, 0, 18));
+            body.Children.Add(Heading(T("3. Le push-to-talk", "3. Push-to-talk"), 18));
+            body.Children.Add(Para(T("Dans SimHub, ouvre « Controls and events », ajoute un mapping avec l'action `AIRaceEnginePlugin.PushToTalk` " +
+                                     "et appuie sur le bouton de ton volant. La page du plugin indique quand le bouton est détecté.",
+                                     "In SimHub, open « Controls and events », add a mapping with the `AIRaceEnginePlugin.PushToTalk` action " +
+                                     "and press your wheel button. The plugin page shows when the button is detected."), "Text", 13, 0, 18));
 
-            body.Children.Add(Para("Tu retrouves cette fenêtre avec le bouton ? en haut de la page du plugin.", "Muted", 12, 0, 0));
-            return Root("Bienvenue dans AI Race Engineer", body, "C'est parti", close);
+            body.Children.Add(Para(T("Tu retrouves cette fenêtre avec le bouton ? en haut de la page du plugin.",
+                                     "You can open this window again with the ? button at the top of the plugin page."), "Muted", 12, 0, 0));
+            return Root(T("Bienvenue dans AI Race Engineer", "Welcome to AI Race Engineer"), body, T("C'est parti", "Let's go"), close);
         }
 
         // ---------- Fenêtre ----------
@@ -248,7 +356,7 @@ namespace AIRaceEngineer
         {
             var t = new TextBlock { FontSize = 13, Foreground = Theme.B("Text"), TextWrapping = TextWrapping.Wrap, LineHeight = 19, Margin = new Thickness(12, 0, 0, 6) };
             t.Inlines.Add(new Run(name) { FontWeight = FontWeights.SemiBold });
-            t.Inlines.Add(new Run(" : " + text));
+            t.Inlines.Add(new Run(T(" : ", ": ") + text));
             if (guide != null)
             {
                 var link = new Hyperlink(new Run("Guide")) { Foreground = Theme.B("AccentLine") };
@@ -277,7 +385,8 @@ namespace AIRaceEngineer
                 else if (m.Groups["code"].Success)
                     inlines.Add(new Run(m.Groups["code"].Value) { FontFamily = Theme.Mono, FontSize = 12, Background = Theme.B("Raised") });
                 else
-                    inlines.Add(new Run("« " + m.Groups["ui"].Value + " »") { FontWeight = FontWeights.SemiBold });
+                    // Libellé d'un bouton : entre guillemets en français, entre guillemets anglais sinon
+                    inlines.Add(new Run(T("« " + m.Groups["ui"].Value + " »", "“" + m.Groups["ui"].Value + "”")) { FontWeight = FontWeights.SemiBold });
                 pos = m.Index + m.Length;
             }
             if (pos < markup.Length) inlines.Add(new Run(markup.Substring(pos)));

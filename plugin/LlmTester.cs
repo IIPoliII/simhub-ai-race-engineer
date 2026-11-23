@@ -17,7 +17,8 @@ namespace AIRaceEngineer
     {
         public bool Busy { get; private set; }
         public bool? Ok { get; private set; }          // null : pas encore testé / en cours
-        public string Message { get; private set; } = "";
+        private Msg _message;
+        public string Message => _message?.ToString() ?? "";
         public string[] Suggestions { get; private set; } = new string[0];
         public int Revision { get; private set; }
 
@@ -25,27 +26,27 @@ namespace AIRaceEngineer
         {
             if (Busy) return;
 
-            string missing = null;
-            if (info.NeedsKey && string.IsNullOrWhiteSpace(p.ApiKey)) missing = "Colle d'abord ta clé API.";
-            else if (info.AccountLabel != null && string.IsNullOrWhiteSpace(p.AccountId)) missing = $"Renseigne d'abord le {info.AccountLabel}.";
+            Msg missing = null;
+            if (info.NeedsKey && string.IsNullOrWhiteSpace(p.ApiKey)) missing = new Msg("Colle d'abord ta clé API.", "Paste your API key first.");
+            else if (info.AccountLabel != null && string.IsNullOrWhiteSpace(p.AccountId)) missing = new Msg($"Renseigne d'abord le {info.AccountLabel}.", $"Fill in the {info.AccountLabel} first.");
             if (missing != null) { Publish(false, missing, null); return; }
 
             Busy = true;
-            Publish(null, "Test en cours...", null);
+            Publish(null, new Msg("Test en cours...", "Testing..."), null);
             var baseUrl = info.BaseUrl(p);
             var key = string.IsNullOrWhiteSpace(p.ApiKey) ? "none" : p.ApiKey.Trim();
             Task.Run(() =>
             {
                 try { Test(info, baseUrl, key, model); }
-                catch (Exception ex) { Publish(false, "Erreur : " + ex.Message, null); }
+                catch (Exception ex) { Publish(false, new Msg("Erreur : " + ex.Message, "Error: " + ex.Message), null); }
                 finally { Busy = false; }
             });
         }
 
-        private void Publish(bool? ok, string message, string[] suggestions)
+        private void Publish(bool? ok, Msg message, string[] suggestions)
         {
             Ok = ok;
-            Message = message;
+            _message = message;
             Suggestions = suggestions ?? new string[0];
             Revision++;
         }
@@ -70,9 +71,11 @@ namespace AIRaceEngineer
                     var ms = (int)(DateTime.UtcNow - started).TotalMilliseconds;
                     var answer = ((string)JObject.Parse(json).SelectToken("choices[0].message.content") ?? "").Trim();
                     if (answer.Length == 0)
-                        Publish(false, $"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler, trop lent pour la radio. Choisis-en un plus direct.", null);
+                        Publish(false, new Msg($"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler, trop lent pour la radio. Choisis-en un plus direct.",
+                                               $"{model} answers, but its reply is empty: it is a model that thinks before speaking, too slow for the radio. Pick a more direct one."), null);
                     else
-                        Publish(true, $"Connexion OK · {model} · réponse en {ms} ms" + (answer.Length < 40 ? $" : « {answer} »" : ""), null);
+                        Publish(true, new Msg($"Connexion OK · {model} · réponse en {ms} ms" + (answer.Length < 40 ? $" : « {answer} »" : ""),
+                                              $"Connection OK · {model} · answered in {ms} ms" + (answer.Length < 40 ? $": “{answer}”" : "")), null);
                 }
                 catch (WebException ex) when (ex.Response is HttpWebResponse r)
                 {
@@ -82,20 +85,21 @@ namespace AIRaceEngineer
                     int code = (int)r.StatusCode;
                     var allowed = AllowedValues(detail);
                     if (allowed.Length > 0)
-                        Publish(false, $"Le modèle « {model} » n'est pas accepté par {info.Name}. Choisis-en un :", allowed);
+                        Publish(false, new Msg($"Le modèle « {model} » n'est pas accepté par {info.Name.FrText}. Choisis-en un :", $"{info.Name.EnText} does not accept the model “{model}”. Pick one:"), allowed);
                     else if (code == 401 || code == 403)
-                        Publish(false, $"Clé API refusée ({code}). Vérifie la clé" +
-                                       (info.Id == "infomaniak" ? " et qu'elle a le scope « ai-tools »." : "."), null);
+                        Publish(false, new Msg($"Clé API refusée ({code}). Vérifie la clé" + (info.Id == "infomaniak" ? " et qu'elle a le scope « ai-tools »." : "."),
+                                               $"API key rejected ({code}). Check the key" + (info.Id == "infomaniak" ? " and that it has the ai-tools scope." : ".")), null);
                     else if (code == 404)
-                        Publish(false, "Adresse introuvable (404)" + (info.AccountLabel != null ? $" : vérifie le {info.AccountLabel}." : "."), null);
+                        Publish(false, new Msg("Adresse introuvable (404)" + (info.AccountLabel != null ? $" : vérifie le {info.AccountLabel}." : "."),
+                                               "Address not found (404)" + (info.AccountLabel != null ? $": check the {info.AccountLabel}." : ".")), null);
                     else if (code == 429)
-                        Publish(false, "Quota dépassé (429). Réessaie plus tard ou change de fournisseur.", null);
+                        Publish(false, new Msg("Quota dépassé (429). Réessaie plus tard ou change de fournisseur.", "Quota exceeded (429). Try again later or switch provider."), null);
                     else
-                        Publish(false, $"Erreur {code} : {Short(Describe(detail))}", null);
+                        Publish(false, new Msg($"Erreur {code} : {Short(Describe(detail))}", $"Error {code}: {Short(Describe(detail))}"), null);
                 }
                 catch (WebException ex)
                 {
-                    Publish(false, "Connexion impossible : " + ex.Message, null);
+                    Publish(false, new Msg("Connexion impossible : " + ex.Message, "Cannot connect: " + ex.Message), null);
                 }
             }
         }

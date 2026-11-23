@@ -18,14 +18,24 @@ KOKORO_FILES = {
 KOKORO_LANG = {"a": "en-us", "b": "en-gb", "f": "fr-fr", "e": "es", "i": "it", "p": "pt-br", "h": "hi", "j": "ja", "z": "cmn"}
 
 
-# Remplacé par engineer.py pour afficher la progression dans la page du plugin SimHub
-progress = print
+# Langue des messages (celle des réglages, choisie par engineer.py)
+lang = "fr"
+
+
+def _t(fr: str, en: str) -> str:
+    return fr if lang == "fr" else en
+
+
+def progress(message: str, code: str = "loading"):
+    """Remplacé par engineer.py pour afficher la progression dans la page du plugin SimHub.
+    code : état indépendant de la langue (loading, warn), lu par la page."""
+    print(message, flush=True)
 
 
 def _download(url: str, dest: Path):
     dest.parent.mkdir(parents=True, exist_ok=True)
     tmp = dest.with_suffix(dest.suffix + ".part")
-    progress(f"Téléchargement de la voix ({dest.name})...")
+    progress(_t(f"Téléchargement de la voix ({dest.name})...", f"Downloading the voice ({dest.name})..."))
     last_step = -1
     with httpx.stream("GET", url, follow_redirects=True, timeout=60) as r:
         r.raise_for_status()
@@ -38,7 +48,7 @@ def _download(url: str, dest: Path):
                 step = done * 10 // total if total else 0
                 if step != last_step:
                     last_step = step
-                    progress(f"Téléchargement de la voix ({dest.name}) : {step * 10} %")
+                    progress(_t(f"Téléchargement de la voix ({dest.name}) : {step * 10} %", f"Downloading the voice ({dest.name}): {step * 10}%"))
     tmp.replace(dest)
 
 
@@ -63,7 +73,7 @@ class ElevenLabsVoice:
 
     def __init__(self, cfg: dict):
         if not cfg.get("api_key"):
-            raise ValueError("clé API ElevenLabs manquante dans la page du plugin")
+            raise ValueError(_t("clé API ElevenLabs manquante dans la page du plugin", "ElevenLabs API key missing in the plugin page"))
         self.http = httpx.Client(
             base_url="https://api.elevenlabs.io",
             headers={"xi-api-key": cfg["api_key"]},
@@ -152,7 +162,7 @@ class Voice:
         except Exception as e:  # pas d'internet, service indisponible : la voix locale prend le relais
             if not isinstance(self.engine, NeuralVoice):
                 raise
-            progress(f"Voix en ligne indisponible ({e}), voix locale utilisée.")
+            progress(_t(f"Voix en ligne indisponible ({e}), voix locale utilisée.", f"Online voice unavailable ({e}), using the local voice."), "warn")
             k = self._kokoro()
             return k.synth(spoken_fr(text) if k.lang == "fr-fr" else text)
 

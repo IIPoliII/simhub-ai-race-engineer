@@ -29,6 +29,20 @@ PLUGIN_TIMEOUT_S = 20   # lancé par SimHub : on s'arrête si SimHub ne répond 
 
 GREETING = {"fr": "Radio check, je t'entends.", "en": "Radio check, loud and clear."}
 
+# Langue des messages affichés dans la page du plugin : celle des réglages
+# (avant de les recevoir, celle que le plugin passe au lancement)
+LANG = os.environ.get("AIR_LANG") or "fr"
+
+
+def t(fr: str, en: str) -> str:
+    return fr if LANG == "fr" else en
+
+
+def set_language(language: str):
+    global LANG
+    import tts
+    LANG = tts.lang = "fr" if language == "fr" else "en"
+
 # Utilisé quand SimHub ne tourne pas (--say, --prepare)
 DEFAULT_CONFIG = {
     "rev": 0,
@@ -79,11 +93,12 @@ class Plugin:
         except (httpx.HTTPError, ValueError):
             return None
 
-    def status(self, message: str):
-        """Affiché dans la page du plugin, et dans le journal."""
+    def status(self, message: str, code: str = "loading"):
+        """Affiché dans la page du plugin, et dans le journal.
+        code : état indépendant de la langue, lu par la page (ready, speaking, loading, warn, error)."""
         print(message, flush=True)
         try:
-            self.get("/client-status", m=message)
+            self.get("/client-status", m=message, c=code)
         except (httpx.HTTPError, ValueError):
             pass
 
@@ -107,22 +122,24 @@ class Engine:
     def apply(self, cfg: dict):
         import tts
         tts.progress = self.plugin.status
+        set_language(cfg.get("language", "fr"))
         old = self.cfg
 
         def changed(*keys):
             return any(old.get(k) != cfg.get(k) for k in keys)
 
         if self.voice is None or changed("tts", "elevenlabs"):
-            self.plugin.status("Chargement de la voix...")
+            self.plugin.status(t("Chargement de la voix...", "Loading the voice..."))
             try:
                 self.voice = tts.Voice(cfg["tts"], cfg.get("elevenlabs", {}))
             except ValueError as e:
                 # ElevenLabs mal configuré : on garde une voix locale plutôt que rester muet
-                self.plugin.status(f"ElevenLabs : {e}. Voix locale utilisée.")
+                self.plugin.status(t(f"ElevenLabs : {e}. Voix locale utilisée.", f"ElevenLabs: {e}. Using the local voice."), "warn")
                 self.voice = tts.Voice({**cfg["tts"], "engine": "kokoro"}, {})
 
         if self.need_stt and (self.stt is None or changed("stt", "language")):
-            self.plugin.status("Chargement de la reconnaissance vocale (premier lancement : téléchargement)...")
+            self.plugin.status(t("Chargement de la reconnaissance vocale (premier lancement : téléchargement)...",
+                                 "Loading speech recognition (first launch: downloading)..."))
             from stt import Transcriber
             self.stt = Transcriber(cfg["stt"], cfg["language"])
 
@@ -138,13 +155,13 @@ class Engine:
         return self.plugin.snapshot()
 
     def say(self, text: str):
-        # « À la radio » bloque les boutons Radio check / Écouter de la page jusqu'à la fin de la phrase
-        self.plugin.status("À la radio")
+        # « speaking » bloque les boutons Radio check / Écouter de la page jusqu'à la fin de la phrase
+        self.plugin.status(t("À la radio", "On the radio"), "speaking")
         try:
             samples, rate = self.voice.render(text)
             audio.play(samples, rate)
         finally:
-            self.plugin.status("Prêt")
+            self.plugin.status(t("Prêt", "Ready"), "ready")
 
     def answer_audio(self, samples):
         text, t_stt = timed(self.stt.transcribe, samples)
@@ -158,7 +175,7 @@ class Engine:
         try:
             answer, t_llm = timed(self.engineer.ask, question, self.snapshot())
         except Exception as e:  # réseau, clé invalide, quota...
-            self.plugin.status(f"Erreur IA : {e}")
+            self.plugin.status(t(f"Erreur IA : {e}", f"AI error: {e}"), "error")
             return
         (samples, rate), t_tts = timed(self.voice.render, answer)
         print(f"< {answer}\n  [stt {t_stt:.2f}s | ia {t_llm:.2f}s | voix {t_tts:.2f}s]", flush=True)
@@ -190,13 +207,13 @@ def run(plugin: Plugin, managed: bool):
             try:
                 if kind == "config":
                     engine.apply(payload)
-                    plugin.status("Prêt")
+                    plugin.status(t("Prêt", "Ready"), "ready")
                 elif kind == "say":
                     engine.say(payload)
                 elif kind == "audio":
                     engine.answer_audio(payload)
             except Exception as e:
-                plugin.status(f"Erreur : {e}")
+                plugin.status(t(f"Erreur : {e}", f"Error: {e}"), "error")
 
     threading.Thread(target=worker, daemon=True).start()
     jobs.put(("config", cfg))
@@ -247,7 +264,7 @@ def run(plugin: Plugin, managed: bool):
                 recorder.start()
                 recording, started = True, time.time()
             except Exception as e:
-                plugin.status(f"Micro : {e}")
+                plugin.status(t(f"Micro : {e}", f"Microphone: {e}"), "error")
         elif not down and recording:
             samples = recorder.stop()
             recording = False
@@ -265,11 +282,11 @@ def prepare():
     from faster_whisper import download_model
     tts.KokoroVoice(DEFAULT_CONFIG["tts"])
     for size in ("small", "base"):
-        print(f"Téléchargement de la reconnaissance vocale ({size})...", flush=True)
+        print(t(f"Téléchargement de la reconnaissance vocale ({size})...", f"Downloading speech recognition ({size})..."), flush=True)
         download_model(size)
     # Repère lu par le plugin : la mise en route est faite (sinon il la relance au démarrage de SimHub)
     (Path(sys.prefix) / "air-prepared").write_text("ok")
-    print("Modèles prêts.", flush=True)
+    print(t("Modèles prêts.", "Models ready."), flush=True)
 
 
 def lower_priority():
@@ -294,6 +311,7 @@ def main():
     args = ap.parse_args()
 
     if args.prepare:
+        set_language(LANG)
         prepare()
         return
 

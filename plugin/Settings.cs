@@ -20,7 +20,8 @@ namespace AIRaceEngineer
     /// <summary>Description d'un fournisseur d'IA compatible OpenAI.</summary>
     public class ProviderInfo
     {
-        public string Id, Name, Tagline, AccountLabel, AccountHelp, KeyHelpUrl, KeyHelp;
+        public string Id, AccountLabel;
+        public Msg Name, Tagline, AccountHelp, KeyHelp, KeyHelpUrl;
         public string[] Models;
         public Func<ProviderSettings, string> BaseUrl;
         public bool NeedsKey = true;
@@ -30,44 +31,44 @@ namespace AIRaceEngineer
         {
             new ProviderInfo
             {
-                Id = "infomaniak", Name = "Infomaniak", Tagline = "Suisse · 1M de crédits offerts",
+                Id = "infomaniak", Name = "Infomaniak", Tagline = new Msg("Suisse · 1M de crédits offerts", "Swiss · 1M free credits"),
                 Models = new[] { "mistralai/Ministral-3-14B-Instruct-2512", "mistralai/Mistral-Small-4-119B-2603", "google/gemma-4-31B-it" },
-                AccountLabel = "Product ID", AccountHelp = "Manager Infomaniak → AI Tools : le numéro du produit.",
-                KeyHelp = "Token API avec le scope « ai-tools ».",
-                KeyHelpUrl = "https://www.infomaniak.com/fr/hebergement/ai-tools",
+                AccountLabel = "Product ID", AccountHelp = new Msg("Manager Infomaniak → AI Tools : le numéro du produit.", "Infomaniak Manager → AI Tools: the product number."),
+                KeyHelp = new Msg("Token API avec le scope « ai-tools ».", "API token with the ai-tools scope."),
+                KeyHelpUrl = new Msg("https://www.infomaniak.com/fr/hebergement/ai-tools", "https://www.infomaniak.com/en/hosting/ai-tools"),
                 // API v2 : accepte tout le catalogue (la v1 ne connaît que mistral3, mistral24b et qwen3)
                 BaseUrl = p => $"https://api.infomaniak.com/2/ai/{p.AccountId.Trim()}/openai/v1",
             },
             new ProviderInfo
             {
-                Id = "cloudflare", Name = "Cloudflare", Tagline = "Workers AI · quota gratuit / jour",
+                Id = "cloudflare", Name = "Cloudflare", Tagline = new Msg("Workers AI · quota gratuit / jour", "Workers AI · free daily quota"),
                 Models = new[] { "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct-fast", "@cf/mistralai/mistral-small-3.1-24b-instruct" },
-                AccountLabel = "Account ID", AccountHelp = "Tableau de bord Cloudflare → Workers AI.",
-                KeyHelp = "Token API avec la permission « Workers AI ».",
+                AccountLabel = "Account ID", AccountHelp = new Msg("Tableau de bord Cloudflare → Workers AI.", "Cloudflare dashboard → Workers AI."),
+                KeyHelp = new Msg("Token API avec la permission « Workers AI ».", "API token with the Workers AI permission."),
                 KeyHelpUrl = "https://dash.cloudflare.com/profile/api-tokens",
                 BaseUrl = p => $"https://api.cloudflare.com/client/v4/accounts/{p.AccountId.Trim()}/ai/v1",
             },
             new ProviderInfo
             {
-                Id = "openai", Name = "OpenAI", Tagline = "GPT · quelques centimes / course",
+                Id = "openai", Name = "OpenAI", Tagline = new Msg("GPT · quelques centimes / course", "GPT · a few cents / race"),
                 Models = new[] { "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o-mini" },
-                KeyHelp = "Clé API de ton compte OpenAI.",
+                KeyHelp = new Msg("Clé API de ton compte OpenAI.", "API key from your OpenAI account."),
                 KeyHelpUrl = "https://platform.openai.com/api-keys",
                 BaseUrl = p => "https://api.openai.com/v1",
             },
             new ProviderInfo
             {
-                Id = "claude", Name = "Claude", Tagline = "Anthropic · très bon en français",
+                Id = "claude", Name = "Claude", Tagline = new Msg("Anthropic · très bon en français", "Anthropic · very good in French"),
                 Models = new[] { "claude-haiku-5-5", "claude-sonnet-5-5" },
-                KeyHelp = "Clé API de la console Anthropic.",
+                KeyHelp = new Msg("Clé API de la console Anthropic.", "API key from the Anthropic console."),
                 KeyHelpUrl = "https://platform.claude.com/settings/keys",
                 BaseUrl = p => "https://api.anthropic.com/v1/",
             },
             new ProviderInfo
             {
-                Id = "custom", Name = "Autre", Tagline = "Ollama, LM Studio, API compatible",
+                Id = "custom", Name = new Msg("Autre", "Other"), Tagline = new Msg("Ollama, LM Studio, API compatible", "Ollama, LM Studio, compatible API"),
                 Models = new[] { "qwen3:4b", "llama3.2:3b", "mistral-small3.2" },
-                NeedsKey = false, KeyHelp = "Souvent inutile en local.",
+                NeedsKey = false, KeyHelp = new Msg("Souvent inutile en local.", "Usually not needed locally."),
                 BaseUrl = p => string.IsNullOrWhiteSpace(p.BaseUrl) ? "http://localhost:11434/v1" : p.BaseUrl.Trim(),
             },
         };
@@ -82,13 +83,13 @@ namespace AIRaceEngineer
         public static readonly VoiceInfo[] Kokoro =
         {
             new VoiceInfo { Language = "fr", Id = "ff_siwis", Label = "Siwis (femme)" },
-            new VoiceInfo { Language = "en", Id = "bm_george", Label = "George (britannique, homme)" },
-            new VoiceInfo { Language = "en", Id = "bm_lewis", Label = "Lewis (britannique, homme)" },
-            new VoiceInfo { Language = "en", Id = "bm_daniel", Label = "Daniel (britannique, homme)" },
-            new VoiceInfo { Language = "en", Id = "bf_emma", Label = "Emma (britannique, femme)" },
-            new VoiceInfo { Language = "en", Id = "am_michael", Label = "Michael (américain, homme)" },
-            new VoiceInfo { Language = "en", Id = "am_adam", Label = "Adam (américain, homme)" },
-            new VoiceInfo { Language = "en", Id = "af_heart", Label = "Heart (américaine, femme)" },
+            new VoiceInfo { Language = "en", Id = "bm_george", Label = "George (British, male)" },
+            new VoiceInfo { Language = "en", Id = "bm_lewis", Label = "Lewis (British, male)" },
+            new VoiceInfo { Language = "en", Id = "bm_daniel", Label = "Daniel (British, male)" },
+            new VoiceInfo { Language = "en", Id = "bf_emma", Label = "Emma (British, female)" },
+            new VoiceInfo { Language = "en", Id = "am_michael", Label = "Michael (American, male)" },
+            new VoiceInfo { Language = "en", Id = "am_adam", Label = "Adam (American, male)" },
+            new VoiceInfo { Language = "en", Id = "af_heart", Label = "Heart (American, female)" },
         };
 
         /// <summary>Voix neuronales Microsoft (en ligne, gratuites).</summary>
@@ -98,11 +99,11 @@ namespace AIRaceEngineer
             new VoiceInfo { Language = "fr", Id = "fr-FR-DeniseNeural", Label = "Denise (femme)" },
             new VoiceInfo { Language = "fr", Id = "fr-FR-RemyMultilingualNeural", Label = "Rémy (homme, plus lent à générer)" },
             new VoiceInfo { Language = "fr", Id = "fr-CA-AntoineNeural", Label = "Antoine (québécois, homme)" },
-            new VoiceInfo { Language = "en", Id = "en-GB-RyanNeural", Label = "Ryan (britannique, homme)" },
-            new VoiceInfo { Language = "en", Id = "en-GB-ThomasNeural", Label = "Thomas (britannique, homme)" },
-            new VoiceInfo { Language = "en", Id = "en-GB-SoniaNeural", Label = "Sonia (britannique, femme)" },
-            new VoiceInfo { Language = "en", Id = "en-US-AndrewNeural", Label = "Andrew (américain, homme)" },
-            new VoiceInfo { Language = "en", Id = "en-AU-WilliamNeural", Label = "William (australien, homme)" },
+            new VoiceInfo { Language = "en", Id = "en-GB-RyanNeural", Label = "Ryan (British, male)" },
+            new VoiceInfo { Language = "en", Id = "en-GB-ThomasNeural", Label = "Thomas (British, male)" },
+            new VoiceInfo { Language = "en", Id = "en-GB-SoniaNeural", Label = "Sonia (British, female)" },
+            new VoiceInfo { Language = "en", Id = "en-US-AndrewNeural", Label = "Andrew (American, male)" },
+            new VoiceInfo { Language = "en", Id = "en-AU-WilliamNeural", Label = "William (Australian, male)" },
         };
     }
 

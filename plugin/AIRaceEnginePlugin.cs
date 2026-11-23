@@ -11,7 +11,8 @@ namespace AIRaceEngineer
     /// Ingénieur de course IA : expose la télémétrie unifiée de SimHub (tous les jeux) au client vocal,
     /// gère les réglages, le push-to-talk (Controls and events) et les annonces automatiques.
     /// </summary>
-    [PluginDescription("Ingénieur de course IA vocal : pose tes questions à la radio, reçois les annonces de course")]
+    // Texte fixe (attribut) : en anglais, la langue la plus large
+    [PluginDescription("AI voice race engineer: ask questions over the radio, get race callouts")]
     [PluginAuthor("iipoliii")]
     [PluginName("AI Race Engineer")]
     public class AIRaceEnginePlugin : IPlugin, IDataPlugin, IWPFSettingsV2
@@ -32,7 +33,7 @@ namespace AIRaceEngineer
                 SimHub.Logging.Current.Error("[AI Race Engineer] page : " + ex);
                 return new System.Windows.Controls.UserControl
                 {
-                    Content = new System.Windows.Controls.TextBlock { Text = "Erreur d'affichage de la page : " + ex.Message, Margin = new System.Windows.Thickness(20), TextWrapping = System.Windows.TextWrapping.Wrap },
+                    Content = new System.Windows.Controls.TextBlock { Text = L10n.T("Erreur d'affichage de la page : ", "Page display error: ") + ex.Message, Margin = new System.Windows.Thickness(20), TextWrapping = System.Windows.TextWrapping.Wrap },
                 };
             }
         }
@@ -44,8 +45,12 @@ namespace AIRaceEngineer
         public string Status { get; private set; } = "En attente du jeu";
         public string GameName { get; private set; }   // null : pas de jeu en cours
         public string GameDetail { get; private set; } = "";
-        public string ServerError { get; private set; }
+        private Msg _serverError;
+        public string ServerError => _serverError;
+        /// <summary>Dernier message du client vocal, déjà dans la langue des réglages.</summary>
         public string ClientStatus { get; private set; } = "";
+        /// <summary>État du client, indépendant de la langue : ready, speaking, loading, warn, error.</summary>
+        public string ClientState { get; private set; } = "";
         public bool PushToTalkDown => _ptt;
         public bool ClientConnected => (DateTime.UtcNow - _lastClientPoll).TotalSeconds < 2;
         public string Url => $"http://127.0.0.1:{Port}/snapshot";
@@ -88,6 +93,7 @@ namespace AIRaceEngineer
         public void Init(PluginManager pluginManager)
         {
             Settings = EngineerSettings.Load();
+            L10n.Language = Settings.Language;
             PublishConfig();
             _callouts = new Callouts(() => Settings, Say);
 
@@ -108,8 +114,8 @@ namespace AIRaceEngineer
             }
             catch (Exception ex)
             {
-                ServerError = $"Impossible d'ouvrir le port {Port} : {ex.Message}";
-                SimHub.Logging.Current.Error("[AI Race Engineer] " + ServerError);
+                _serverError = new Msg($"Impossible d'ouvrir le port {Port} : {ex.Message}", $"Cannot open port {Port}: {ex.Message}");
+                SimHub.Logging.Current.Error("[AI Race Engineer] " + _serverError.FrText);
             }
 
             // Lance le client vocal, et le relance s'il s'arrête (sauf s'il plante en boucle)
@@ -188,9 +194,11 @@ namespace AIRaceEngineer
             {
                 var answer = System.Windows.MessageBox.Show(app.MainWindow,
                     Updater.Staged
-                        ? $"AI Race Engineer {Updater.Latest} est prêt.\n\nRedémarrer SimHub maintenant pour l'installer ? Sinon, il s'installera à la prochaine fermeture de SimHub."
-                        : $"AI Race Engineer {Updater.Latest} est installé.\n\nRedémarrer SimHub maintenant pour l'activer ?",
-                    "AI Race Engineer : mise à jour installée",
+                        ? L10n.T($"AI Race Engineer {Updater.Latest} est prêt.\n\nRedémarrer SimHub maintenant pour l'installer ? Sinon, il s'installera à la prochaine fermeture de SimHub.",
+                                 $"AI Race Engineer {Updater.Latest} is ready.\n\nRestart SimHub now to install it? Otherwise it will install the next time SimHub closes.")
+                        : L10n.T($"AI Race Engineer {Updater.Latest} est installé.\n\nRedémarrer SimHub maintenant pour l'activer ?",
+                                 $"AI Race Engineer {Updater.Latest} is installed.\n\nRestart SimHub now to activate it?"),
+                    L10n.T("AI Race Engineer : mise à jour installée", "AI Race Engineer: update installed"),
                     System.Windows.MessageBoxButton.YesNo, System.Windows.MessageBoxImage.Question);
                 if (answer == System.Windows.MessageBoxResult.Yes) RestartSimHub();
             }));
@@ -222,6 +230,7 @@ namespace AIRaceEngineer
         /// <summary>À appeler après chaque modification des réglages dans le panneau.</summary>
         public void SettingsChanged()
         {
+            L10n.Language = Settings.Language;
             try { Settings.Save(); }
             catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] sauvegarde : " + ex.Message); }
             PublishConfig();
@@ -297,12 +306,24 @@ namespace AIRaceEngineer
                     return Poll(Int(query, "since", -1), query.ContainsKey("wait"), Int(query, "ptt", 0) == 1, Int(query, "rev", -1));
                 case "/client-status":
                     if (!Authorized(auth)) throw new UnauthorizedAccessException();
-                    if (query.TryGetValue("m", out var m)) ClientStatus = m.Length > 200 ? m.Substring(0, 200) : m;
+                    if (query.TryGetValue("m", out var m))
+                    {
+                        ClientStatus = m.Length > 200 ? m.Substring(0, 200) : m;
+                        ClientState = query.TryGetValue("c", out var c) ? c : LegacyState(m);
+                    }
                     return "{}";
                 default:
                     return null;
             }
         }
+
+        /// <summary>Client d'avant les codes d'état (0.4.8 et avant) : il n'envoie que son message, en français.</summary>
+        private static string LegacyState(string m) =>
+            m.StartsWith("Prêt") ? "ready"
+            : m.StartsWith("À la radio") ? "speaking"
+            : m.StartsWith("Erreur") || m.StartsWith("Micro") ? "error"
+            : m.StartsWith("ElevenLabs") || m.StartsWith("Voix en ligne") ? "warn"
+            : "loading";
 
         private static int Int(Dictionary<string, string> q, string key, int fallback) =>
             q.TryGetValue(key, out var v) && int.TryParse(v, out var i) ? i : fallback;

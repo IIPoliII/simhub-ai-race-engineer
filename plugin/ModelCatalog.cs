@@ -17,7 +17,8 @@ namespace AIRaceEngineer
     {
         public bool Busy { get; private set; }
         public string[] Models { get; private set; } = new string[0];
-        public string Error { get; private set; }
+        private Msg _error;
+        public string Error => _error;
         public string Key { get; private set; }         // fournisseur + compte + clé de la dernière liste
         public int Revision { get; private set; }
 
@@ -42,13 +43,13 @@ namespace AIRaceEngineer
             Task.Run(() =>
             {
                 string[] models = null;
-                string error = null;
+                Msg error = null;
                 try { models = Fetch(info, baseUrl, apiKey, account); }
-                catch (WebException ex) when (ex.Response is HttpWebResponse r) { error = $"liste des modèles indisponible ({(int)r.StatusCode})"; }
-                catch (Exception ex) { error = "liste des modèles indisponible : " + ex.Message; }
+                catch (WebException ex) when (ex.Response is HttpWebResponse r) { error = new Msg($"liste des modèles indisponible ({(int)r.StatusCode})", $"model list unavailable ({(int)r.StatusCode})"); }
+                catch (Exception ex) { error = new Msg("liste des modèles indisponible : " + ex.Message, "model list unavailable: " + ex.Message); }
 
                 Models = Order(info, models ?? new string[0]);
-                Error = error;
+                _error = error;
                 Key = key;
                 Busy = false;
                 Revision++;

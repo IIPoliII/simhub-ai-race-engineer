@@ -26,7 +26,10 @@ namespace AIRaceEngineer
 
         public Version Current { get; } = Trim(typeof(Updater).Assembly.GetName().Version);
         public Version Latest { get; private set; }
-        public string State { get; private set; } = "";
+        private Msg _state;
+        public string State => _state?.ToString() ?? "";
+        /// <summary>La dernière tentative a échoué ou a été annulée : State le dit.</summary>
+        public bool Failed { get; private set; }
         public bool Busy { get; private set; }
         public bool Installed { get; private set; }
         /// <summary>La nouvelle DLL est prête dans le profil : elle sera copiée à la fermeture de SimHub.</summary>
@@ -108,8 +111,9 @@ namespace AIRaceEngineer
         private void Run(Action action)
         {
             Busy = true;
+            Failed = false;
             try { action(); }
-            catch (Exception ex) { State = "Erreur : " + ex.Message; }
+            catch (Exception ex) { Failed = true; _state = new Msg("Erreur : " + ex.Message, "Error: " + ex.Message); }
             finally { Busy = false; }
         }
 
@@ -123,7 +127,7 @@ namespace AIRaceEngineer
 
         private void Check()
         {
-            State = "Recherche de mises à jour...";
+            _state = new Msg("Recherche de mises à jour...", "Checking for updates...");
             string json;
             try
             {
@@ -135,7 +139,7 @@ namespace AIRaceEngineer
             }
             catch (WebException ex) when ((ex.Response as HttpWebResponse)?.StatusCode == HttpStatusCode.NotFound)
             {
-                State = "Aucune version publiée pour l'instant.";
+                _state = new Msg("Aucune version publiée pour l'instant.", "No version published yet.");
                 return;
             }
 
@@ -144,19 +148,19 @@ namespace AIRaceEngineer
             var asset = (release["assets"] as JArray)?.FirstOrDefault(a => (string)a["name"] == AssetName);
             if (!Version.TryParse(tag, out var latest) || asset == null)
             {
-                State = "Release GitHub illisible (tag ou DLL manquante).";
+                _state = new Msg("Release GitHub illisible (tag ou DLL manquante).", "Unreadable GitHub release (tag or DLL missing).");
                 return;
             }
 
             Latest = Trim(latest);
             _downloadUrl = (string)asset["browser_download_url"];
             _clientUrl = (string)(release["assets"] as JArray)?.FirstOrDefault(a => (string)a["name"] == ClientAssetName)?["browser_download_url"];
-            State = UpdateAvailable ? $"Version {Latest} disponible." : "Tu as la dernière version.";
+            _state = UpdateAvailable ? new Msg($"Version {Latest} disponible.", $"Version {Latest} available.") : new Msg("Tu as la dernière version.", "You have the latest version.");
         }
 
         private void Install(ClientRunner client)
         {
-            State = $"Téléchargement de la version {Latest}...";
+            _state = new Msg($"Téléchargement de la version {Latest}...", $"Downloading version {Latest}...");
             var dir = Path.Combine(Path.GetTempPath(), "AIRaceEngineer-update");
             Directory.CreateDirectory(dir);
             var downloaded = Path.Combine(dir, AssetName);
@@ -170,7 +174,7 @@ namespace AIRaceEngineer
             // Vérifie que c'est bien notre plugin, dans la version annoncée
             var name = AssemblyName.GetAssemblyName(downloaded);
             if (name.Name != "AIRaceEngineer" || Trim(name.Version) != Latest)
-                throw new InvalidOperationException($"fichier téléchargé inattendu ({name.Name} {name.Version}).");
+                throw new InvalidOperationException(L10n.T($"fichier téléchargé inattendu ({name.Name} {name.Version}).", $"unexpected downloaded file ({name.Name} {name.Version})."));
 
             var target = typeof(Updater).Assembly.Location;
 
@@ -183,12 +187,12 @@ namespace AIRaceEngineer
                 _stagedHash = Sha256(bytes);
                 UpdateClient(client, clientZip);
                 Staged = Installed = true;
-                State = $"Version {Latest} prête : elle s'installe au redémarrage de SimHub.";
+                _state = new Msg($"Version {Latest} prête : elle s'installe au redémarrage de SimHub.", $"Version {Latest} ready: it installs when SimHub restarts.");
                 InstallFinished?.Invoke();
                 return;
             }
 
-            State = "Installation : accepte la demande d'autorisation Windows...";
+            _state = new Msg("Installation : accepte la demande d'autorisation Windows...", "Installing: accept the Windows permission prompt...");
 
             string Q(string s) => "'" + s.Replace("'", "''") + "'";
             var script =
@@ -208,16 +212,16 @@ namespace AIRaceEngineer
 
             Process process;
             try { process = Process.Start(psi); }
-            catch (Win32Exception) { State = "Mise à jour annulée."; return; }
+            catch (Win32Exception) { Failed = true; _state = new Msg("Mise à jour annulée.", "Update cancelled."); return; }
 
             process.WaitForExit();
             if (process.ExitCode != 0 || Trim(AssemblyName.GetAssemblyName(target).Version) != Latest)
-                throw new InvalidOperationException("la copie a échoué. Ferme SimHub et relance l'installateur.");
+                throw new InvalidOperationException(L10n.T("la copie a échoué. Ferme SimHub et relance l'installateur.", "the copy failed. Close SimHub and run the installer again."));
 
             UpdateClient(client, clientZip);
             _stagedFailed = false;
             Installed = true;
-            State = $"Version {Latest} installée. Redémarre SimHub pour l'utiliser.";
+            _state = new Msg($"Version {Latest} installée. Redémarre SimHub pour l'utiliser.", $"Version {Latest} installed. Restart SimHub to use it.");
             InstallFinished?.Invoke();
         }
 
@@ -225,7 +229,7 @@ namespace AIRaceEngineer
         private void UpdateClient(ClientRunner client, string clientZip)
         {
             if (_clientUrl == null) return;
-            State = "Mise à jour du client vocal...";
+            _state = new Msg("Mise à jour du client vocal...", "Updating the voice client...");
             client.Stop();
             ExtractOver(clientZip, ClientRunner.ClientDir);
         }

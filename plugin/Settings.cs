@@ -135,6 +135,8 @@ namespace AIRaceEngineer
             new VoiceInfo { Language = "fr", Id = "fr-FR-HenriNeural", Label = "Henri (homme)" },
             new VoiceInfo { Language = "fr", Id = "fr-FR-DeniseNeural", Label = "Denise (femme)" },
             new VoiceInfo { Language = "fr", Id = "fr-FR-RemyMultilingualNeural", Label = "Rémy (homme, plus lent à générer)" },
+            new VoiceInfo { Language = "fr", Id = "fr-CH-FabriceNeural", Label = "Fabrice (suisse, homme)" },
+            new VoiceInfo { Language = "fr", Id = "fr-CH-ArianeNeural", Label = "Ariane (suisse, femme)" },
             new VoiceInfo { Language = "fr", Id = "fr-CA-AntoineNeural", Label = "Antoine (québécois, homme)" },
             new VoiceInfo { Language = "en", Id = "en-GB-RyanNeural", Label = "Ryan (British, male)" },
             new VoiceInfo { Language = "en", Id = "en-GB-ThomasNeural", Label = "Thomas (British, male)" },
@@ -161,6 +163,21 @@ namespace AIRaceEngineer
             }
             catch { }
             return CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "fr" ? "fr" : "en";
+        }
+
+        /// <summary>Septante, huitante, nonante : coché d'office si Windows est réglé sur la Suisse (fr-CH).</summary>
+        public bool SwissNumbers { get; set; } = SwissRegion();
+
+        private static bool SwissRegion()
+        {
+            try
+            {
+                // Région de l'utilisateur (Panneau de configuration) : SimHub peut changer la culture de ses threads
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Control Panel\International"))
+                    if (key?.GetValue("LocaleName") is string locale) return locale.EndsWith("-CH", StringComparison.OrdinalIgnoreCase);
+            }
+            catch { }
+            return false;
         }
 
         // IA
@@ -389,6 +406,7 @@ namespace AIRaceEngineer
             {
                 rev,
                 language = Language,
+                swiss_numbers = SwissNumbers && Language == "fr",
                 llm = new
                 {
                     provider = info.Id,

@@ -571,6 +571,9 @@ namespace AIRaceEngineer
         private object Build(GameData data, StatusDataBase d, Neighbours n)
         {
             bool noTemp = NoTemperature(d);
+            // Hors course, le classement se fait au meilleur tour : sans tour bouclé, la place donnée par le jeu
+            // (souvent 1, seul en piste) ne veut rien dire et l'ingé disait « t'es en tête »
+            bool ranked = Callouts.IsRace(d.SessionTypeName) || d.BestLapTime > TimeSpan.Zero;
             // Valeurs « absentes » de SimHub (-1, 0) envoyées comme null : l'ingénieur dit qu'il ne sait pas
             return new
             {
@@ -593,17 +596,18 @@ namespace AIRaceEngineer
                 },
                 me = new
                 {
-                    position = n.MyPos > 0 ? n.MyPos : (int?)null,
+                    position = ranked && n.MyPos > 0 ? n.MyPos : (int?)null,
                     overall_position = n.MultiClass && n.Me != null && n.Me.Position > 0 ? n.Me.Position : (int?)null,
                     field_size = n.MultiClass ? d.PlayerClassOpponentsCount : d.OpponentsCount,
                     lap = d.CurrentLap,
-                    current_lap_time = T(d.CurrentLapTime),
+                    // Au stand, le chrono tourne quand même : l'ingé le donnait comme un temps au tour
+                    current_lap_time = d.IsInPitLane == 1 ? null : T(d.CurrentLapTime),
                     last_lap = T(d.LastLapTime),
                     best_lap = T(d.BestLapTime),
                     session_best_lap = T(d.SessionFastestLapTime),
-                    delta_to_best = R(d.DeltaToSessionBest, 2),
+                    delta_to_best = d.BestLapTime > TimeSpan.Zero ? R(d.DeltaToSessionBest, 2) : null,
                     lap_valid = d.IsLapValid,
-                    gap_to_leader = (n.MultiClass ? n.Me?.GaptoClassLeader : n.Me?.GaptoLeader) is double g ? R(Math.Abs(g), 1) : null,
+                    gap_to_leader = !ranked ? null : (n.MultiClass ? n.Me?.GaptoClassLeader : n.Me?.GaptoLeader) is double g ? R(Math.Abs(g), 1) : null,
                     in_pit_lane = d.IsInPitLane == 1,
                     speed_kmh = R(d.SpeedKmh, 0),
                     gear = d.Gear,
@@ -632,8 +636,8 @@ namespace AIRaceEngineer
                     brake_bias = d.BrakeBias > 0 ? R(d.BrakeBias, 1) : null,
                     engine_map = d.EngineMap >= 0 ? d.EngineMap : (int?)null,
                 },
-                car_ahead = Rival(n.Ahead, n.MultiClass),
-                car_behind = Rival(n.Behind, n.MultiClass),
+                car_ahead = ranked ? Rival(n.Ahead, n.MultiClass) : null,
+                car_behind = ranked ? Rival(n.Behind, n.MultiClass) : null,
                 recent_laps = RecentLaps(),
             };
         }

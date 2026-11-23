@@ -79,13 +79,14 @@ ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it c
 
 - **Language and voice**: French or English (by default, the language chosen in the installer, otherwise your
   Windows language), then the voice engine:
-  - **Online** (default): Microsoft neural voices, free and very natural (Henri, Denise, Rémy, Antoine
-    in French; Ryan, Thomas, Sonia, Andrew, William in English). Without internet, the offline voice takes over;
+  - **Online** (default): Microsoft neural voices, free and very natural (Henri, Denise, Rémy, Fabrice and
+    Ariane from Switzerland, Antoine from Quebec in French; Ryan, Thomas, Sonia, Andrew, William in English). Without internet, the offline voice takes over;
   - **Offline**: Kokoro, on your PC (in English, `George` sounds very much like a British engineer);
   - **ElevenLabs**: the most realistic, paid beyond the free plan.
 
   The **Listen** button next to the voice plays it; **Radio check** at the top of the page works with every engine,
-  ElevenLabs included. Radio effect and fast or accurate recognition are optional.
+  ElevenLabs included. Radio effect and fast or accurate recognition are optional. In French, **Swiss numbers**
+  has the engineer say septante, huitante, nonante (ticked by default when Windows is set to Switzerland).
 - **Track noise**: with the radio effect, F1 cars sometimes pass behind the engineer, like on the pit wall.
   Nothing is recorded: each car is synthesized for each message (revs, gear shifts, distance, Doppler effect),
   so it never sounds the same twice, and sometimes there is none. The background ducks when the engineer

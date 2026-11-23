@@ -5,6 +5,20 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.5.2] - 2026-11-23
+
+### Ajouté
+- Nombres à la suisse (en français, dans Langue et voix) : l'ingé dit septante, huitante, nonante, dans ses réponses
+  comme dans les annonces, quelle que soit la voix. Coché d'office si Windows est réglé sur la Suisse.
+- Deux voix suisses parmi les voix en ligne : Fabrice et Ariane.
+
+### Corrigé
+- Au stand, l'ingé ne donne plus le chrono du tour en cours comme un temps au tour.
+- En essais et en qualifs, l'ingé ne dit plus que tu es en tête avant que tu aies fait un temps.
+- L'ingé répond seulement à la question posée, au lieu d'ajouter des chiffres parfois faux, et dit « essais libres »
+  plutôt que « pratique ».
+- « Pas de télémétrie » devient « Je ne reçois rien du jeu » quand SimHub tourne mais que tu n'es pas en piste.
+
 ## [0.5.1] - 2026-11-23
 
 ### Modifié
@@ -200,6 +214,7 @@ Tous les changements notables du projet sont notés ici. Le format suit
 - Première version : plugin SimHub avec télémétrie JSON, client vocal Python (Whisper local, IA, voix), push-to-talk.
 - Installateur en une ligne et mises à jour depuis SimHub.
 
+[0.5.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.7...v0.4.8

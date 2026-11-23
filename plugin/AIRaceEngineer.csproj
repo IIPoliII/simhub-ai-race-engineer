@@ -6,7 +6,7 @@
     <RootNamespace>AIRaceEngineer</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <Version>0.5.1</Version>
+    <Version>0.5.2</Version>
     <Company>IIPoliII</Company>
     <Product>AI Race Engineer for SimHub</Product>
     <!-- Dossier d'installation de SimHub (surchargeable : dotnet build -p:SimHubDir="D:\SimHub") -->

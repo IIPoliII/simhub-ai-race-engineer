@@ -167,6 +167,7 @@ class Engine:
         import tts
         tts.progress = self.plugin.status
         set_language(cfg.get("language", "fr"))
+        tts.swiss = bool(cfg.get("swiss_numbers"))
 
         def changed(*keys):
             return any(self.cfg.get(k) != cfg.get(k) for k in keys)
@@ -196,9 +197,9 @@ class Engine:
         elif self.need_stt and changed("language"):
             self.stt.language = cfg["language"]  # la langue ne sert qu'à chaque question : pas de rechargement
 
-        if self.engineer is None or changed("llm", "language"):
+        if self.engineer is None or changed("llm", "language", "swiss_numbers"):
             from llm import Engineer
-            self.engineer = Engineer(cfg["llm"], cfg["language"])
+            self.engineer = Engineer(cfg["llm"], cfg["language"], bool(cfg.get("swiss_numbers")))
             self.ai_issue = None
 
         self.cfg = cfg

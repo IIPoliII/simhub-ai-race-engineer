@@ -136,7 +136,7 @@ namespace AIRaceEngineer
             }
         }
 
-        private static bool IsRace(string session) =>
+        internal static bool IsRace(string session) =>
             !string.IsNullOrEmpty(session) &&
             (session.IndexOf("race", StringComparison.OrdinalIgnoreCase) >= 0 ||
              session.IndexOf("course", StringComparison.OrdinalIgnoreCase) >= 0);

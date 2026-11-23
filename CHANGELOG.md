@@ -5,6 +5,20 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.2] - 2026-11-23
+
+### Added
+- Swiss numbers (French only, in Language and voice): the engineer says septante, huitante, nonante, in its answers
+  and in the callouts, whatever the voice. Ticked by default when Windows is set to Switzerland.
+- Two Swiss voices among the online voices: Fabrice and Ariane.
+
+### Fixed
+- In the pits, the engineer no longer gives the running lap clock as a lap time.
+- In practice and qualifying, the engineer no longer says you are leading before you have set a time.
+- The engineer answers only the question asked, instead of adding figures that are sometimes wrong, and calls
+  practice "practice".
+- "No telemetry" is now "Nothing from the game yet" when SimHub is running but you are not on track.
+
 ## [0.5.1] - 2026-11-23
 
 ### Changed
@@ -194,6 +208,7 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.5.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.7...v0.4.8

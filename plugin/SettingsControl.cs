@@ -841,6 +841,12 @@ namespace AIRaceEngineer
                 Changed();
                 Rebuild();
             })));
+            // Français seulement : la page est reconstruite quand la langue change
+            if (S.Language == "fr")
+                body.Children.Add(ToggleRow(T("Nombres à la suisse", "Swiss numbers"),
+                    T("Septante, huitante, nonante au lieu de soixante-dix, quatre-vingts, quatre-vingt-dix",
+                      "Septante, huitante, nonante instead of soixante-dix, quatre-vingts, quatre-vingt-dix"),
+                    S.SwissNumbers, v => { S.SwissNumbers = v; Changed(); }));
 
             _engineHint = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap };
             var engines = Segments("engine", new[] { ("neural", T("En ligne", "Online")), ("kokoro", T("Hors ligne", "Offline")), ("elevenlabs", "ElevenLabs") }, S.TtsEngine, v =>

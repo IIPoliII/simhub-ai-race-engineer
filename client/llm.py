@@ -7,6 +7,7 @@ from openai import BadRequestError, OpenAI
 SYSTEM = {
     "fr": """Tu es l'ingénieur de course du pilote. Tu lui parles à la radio pendant qu'il roule.
 - Réponds en français, en une ou deux phrases courtes, ton calme et pro de radio. Tutoie-le.
+- Réponds seulement à la question posée : n'ajoute pas d'autres chiffres qu'on ne t'a pas demandés.
 - Utilise uniquement la télémétrie fournie. Si une donnée est absente (null), dis-le simplement, n'invente rien.
 - Si session.multiclass vaut true, position, field_size, car_ahead, car_behind et gap_to_leader sont ceux de la classe du pilote ; overall_position est sa place au général.
 - tc ou abs à 0 peut vouloir dire désactivé ou non fourni par le jeu : si tu n'es pas sûr, dis-le.
@@ -15,10 +16,14 @@ SYSTEM = {
 - Le pilote parle vite et approximativement : interprète l'intention (« le mec devant » = car_ahead, « derrière » = car_behind).
 - Arrondis : écarts au dixième, températures et pressions à l'unité ou au dixième, carburant dans l'unité de fuel.unit (Liters = litres, Gallons = gallons, idem pour fuel_used des tours récents) et en tours.
 - Écris les nombres comme on les dit à la radio : « un virgule quatre seconde », temps au tour « une minute quarante-sept trois ».
+- current_lap_time est le chrono du tour en cours, ce n'est pas un temps au tour : un temps au tour, c'est last_lap (dernier tour bouclé) ou best_lap (meilleur). S'ils valent null, le pilote n'a pas encore bouclé de tour.
+- position vaut null en essais ou en qualif tant que le pilote n'a pas de temps. car_ahead ou car_behind à null : personne devant ou derrière, ou pas d'info, n'invente pas d'écart.
+- session.type : PRACTICE = essais libres, QUALIFY = qualifs, RACE = course, HOTLAP = tour chrono.
 - Pneus : fl = avant gauche, fr = avant droit, rl = arrière gauche, rr = arrière droit.
 - Pas de markdown, pas de liste, pas d'emoji : ton texte est lu à voix haute.""",
     "en": """You are the driver's race engineer, talking on the radio while they drive.
 - Answer in English, one or two short sentences, calm professional radio tone.
+- Only answer the question asked: don't add other numbers nobody asked for.
 - Only use the telemetry provided. If a value is missing (null), say so briefly, never make things up.
 - If session.multiclass is true, position, field_size, car_ahead, car_behind and gap_to_leader are within the driver's class; overall_position is the driver's overall position.
 - tc or abs at 0 can mean off or not reported by the game: if unsure, say so.
@@ -27,6 +32,9 @@ SYSTEM = {
 - The driver speaks fast and loosely: infer intent ("the guy in front" = car_ahead, "behind" = car_behind).
 - Round numbers: gaps to a tenth, temperatures and pressures to one or a tenth, fuel in the unit given by fuel.unit (Liters or Gallons, also used by fuel_used in recent_laps) and in laps.
 - Write numbers the way they are spoken on the radio: "one point four seconds", lap times "one forty-seven three".
+- current_lap_time is the clock of the lap in progress, not a lap time: a lap time is last_lap (last completed lap) or best_lap. If they are null, the driver hasn't completed a lap yet.
+- position is null in practice or qualifying until the driver has set a time. car_ahead or car_behind null: nobody there or no data, never invent a gap.
+- session.type: PRACTICE, QUALIFY, RACE, HOTLAP: say practice, qualifying, race, hotlap.
 - Tyres: fl = front left, fr = front right, rl = rear left, rr = rear right.
 - No markdown, lists or emoji: your text is read aloud.""",
 }
@@ -41,6 +49,16 @@ NO_DATA = {
     "en": "No telemetry right now, check that SimHub is running with the plugin.",
 }
 
+# SimHub répond, mais le jeu n'envoie rien (menu, jeu fermé)
+NO_GAME = {
+    "fr": "Je ne reçois rien du jeu pour l'instant. Monte en piste et je te réponds.",
+    "en": "Nothing from the game yet. Get on track and I'll answer.",
+}
+
+# Français de Suisse romande, ajouté à la consigne quand le réglage est coché
+SWISS = ("\n- Tu parles le français de Suisse romande : septante, huitante, nonante (jamais soixante-dix, "
+         "quatre-vingts ni quatre-vingt-dix), par exemple « septante-deux degrés », « nonante-cinq ».")
+
 # Dit à la radio quand le modèle ne renvoie rien (modèle qui réfléchit et épuise max_tokens)
 EMPTY_ANSWER = {
     "fr": "Pas de réponse de l'IA, redemande-moi.",
@@ -49,8 +67,9 @@ EMPTY_ANSWER = {
 
 
 class Engineer:
-    def __init__(self, cfg: dict, language: str):
+    def __init__(self, cfg: dict, language: str, swiss: bool = False):
         self.language = language if language in SYSTEM else "en"
+        self.system = SYSTEM[self.language] + (SWISS if swiss and self.language == "fr" else "")
         # Pas de nouvel essai automatique : une réponse qui arrive 45 s plus tard ne sert plus à rien à la radio
         self.client = OpenAI(base_url=cfg["base_url"], api_key=cfg.get("api_key") or "none", timeout=15, max_retries=0)
         self.model = cfg["model"]
@@ -89,11 +108,13 @@ class Engineer:
         """Réponse à dire à la radio ; vide si le modèle n'a rien répondu."""
         if not self.configured:
             return NOT_CONFIGURED[self.language]
-        if not snapshot or not snapshot.get("game_running"):
+        if not snapshot:
             return NO_DATA[self.language]
+        if not snapshot.get("game_running"):
+            return NO_GAME[self.language]
 
         telemetry = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
-        messages = [{"role": "system", "content": SYSTEM[self.language]}]
+        messages = [{"role": "system", "content": self.system}]
         messages += list(self.history)
         # Échappement JSON de < et > : un pseudo ne peut ni fermer ni ouvrir de balise
         telemetry = telemetry.replace("<", "\\u003c").replace(">", "\\u003e")

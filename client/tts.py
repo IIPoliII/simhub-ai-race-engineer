@@ -13,6 +13,7 @@ import httpx
 import numpy as np
 
 import audio
+from swiss import swiss_fr
 
 MODELS_DIR = Path(__file__).parent / "models"
 KOKORO_FILES = {
@@ -27,6 +28,8 @@ ONLINE_RETRY_S = 60
 
 # Langue des messages (celle des réglages, choisie par engineer.py)
 lang = "fr"
+# Nombres à la suisse (septante, huitante, nonante) quand l'ingé parle français, choisi par engineer.py
+swiss = False
 
 
 def _t(fr: str, en: str) -> str:
@@ -407,6 +410,8 @@ class Voice:
     def render(self, text: str) -> tuple[np.ndarray, int]:
         if not text.strip():
             raise ValueError(_t("texte vide, rien à dire", "empty text, nothing to say"))
+        if swiss and lang == "fr":
+            text = swiss_fr(text)
         samples, rate = self._synth(text)
         if self.radio:
             samples = audio.radio_fx(samples, rate, track=self.track)

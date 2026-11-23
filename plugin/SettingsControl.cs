@@ -381,7 +381,7 @@ namespace AIRaceEngineer
                 line = Theme.B("AccentLine"); glyph = GDownload;
                 title = T($"Version {u.Latest} disponible", $"Version {u.Latest} available");
                 buttons.Children.Add(_installButton = Btn(T("Installer", "Install"), StartInstall, "BtnPrimary", GDownload));
-                buttons.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GLink));
+                buttons.Children.Add(Btn(T("Notes de version", "Release notes"), OpenOnlineReleaseNotes, "BtnGhost", GLink));
             }
 
             var grid = new Grid();
@@ -1053,13 +1053,16 @@ namespace AIRaceEngineer
             ub.Children.Add(_cardRestartButton = Btn(T("Redémarrer SimHub", "Restart SimHub"), AIRaceEnginePlugin.RestartSimHub, "BtnSuccess", GPower));
             ub.Children.Add(_cardCheckButton = Btn(T("Rechercher une mise à jour", "Check for updates"), () => u.CheckAsync(), "Btn", GSync));
             _cardInstallButton.Visibility = _cardRestartButton.Visibility = Visibility.Collapsed;
-            ub.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GLink));
+            ub.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GDoc));
             body.Children.Add(ub);
             return card;
         }
 
-        /// <summary>Le journal des versions dans la langue de la page (bannière et carte).</summary>
-        private static void OpenReleaseNotes() => Open($"https://github.com/{Updater.Repo}/blob/main/" + T("CHANGELOG.fr.md", "CHANGELOG.md"));
+        /// <summary>Notes des versions installées, dans SimHub et sans internet : le changelog est intégré à la DLL.</summary>
+        private static void OpenReleaseNotes() => GuideWindows.ShowReleaseNotes();
+
+        /// <summary>Bannière d'une mise à jour pas encore installée : ses notes ne sont que sur GitHub.</summary>
+        private static void OpenOnlineReleaseNotes() => Open($"https://github.com/{Updater.Repo}/blob/main/" + T("CHANGELOG.fr.md", "CHANGELOG.md"));
 
         // =====================================================================
         // Rafraîchissement

@@ -6,7 +6,7 @@
     <RootNamespace>AIRaceEngineer</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <Version>0.5.2</Version>
+    <Version>0.5.3</Version>
     <Company>IIPoliII</Company>
     <Product>AI Race Engineer for SimHub</Product>
     <!-- Dossier d'installation de SimHub (surchargeable : dotnet build -p:SimHubDir="D:\SimHub") -->
@@ -17,6 +17,13 @@
   <ItemGroup>
     <!-- Permet de compiler en net48 avec le seul SDK .NET, sans Visual Studio -->
     <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.3" PrivateAssets="all" />
+  </ItemGroup>
+
+  <!-- Notes de version affichées dans SimHub, sans internet -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\CHANGELOG.md" LogicalName="CHANGELOG.md" />
+    <!-- WithCulture=false : sinon « .fr. » en ferait une DLL satellite à part, introuvable par le plugin -->
+    <EmbeddedResource Include="..\CHANGELOG.fr.md" LogicalName="CHANGELOG-fr.md" WithCulture="false" />
   </ItemGroup>
 
   <!-- WPF, pour le panneau dans le menu de SimHub -->

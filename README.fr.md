@@ -2,6 +2,8 @@
 
 [English](README.md) · **Français**
 
+![La page du plugin dans SimHub](docs/screenshot-fr.png)
+
 Un ingénieur de course vocal pour **tous les jeux supportés par SimHub** (ACC, iRacing, LMU, rFactor 2, AC, F1...).
 Tu maintiens un bouton du volant, tu poses ta question comme tu veux (« il est à combien le mec devant ? »,
 « mes pneus ça va ? », « j'ai assez d'essence ? »), et l'ingé te répond à la radio. Il t'annonce aussi tout seul
@@ -116,8 +118,9 @@ de sa page et la section « Client vocal et mises à jour » affiche « Installe
 quand SimHub se ferme (le plugin propose de le redémarrer tout de suite), après vérification de son empreinte.
 Pas de demande d'autorisation Windows, sauf si le dossier de SimHub est protégé : elle est alors demandée à chaque
 mise à jour. Le client vocal est mis à jour en même temps. Paramètres Windows → Applications garde la version installée
-par le Setup ; c'est normal. Ce qui change à chaque version : [CHANGELOG.fr.md](CHANGELOG.fr.md) (le bouton
-« Notes de version » de la page du plugin l'ouvre aussi).
+par le Setup ; c'est normal. Ce qui change à chaque version : [CHANGELOG.fr.md](CHANGELOG.fr.md). Le bouton
+« Notes de version » de la page du plugin l'affiche dans SimHub, et après une mise à jour une fenêtre « Nouveautés »
+montre ce qui a changé.
 
 **Performances** : le plugin est fait pour laisser la machine au jeu.
 - Le client vocal tourne en priorité « inférieure à la normale », et la reconnaissance vocale et la voix hors ligne
@@ -153,6 +156,16 @@ elle vaut `null` quand le plugin peut le savoir, et l'ingé te le dit au lieu d'
 TC ou ABS à 0 peut vouloir dire désactivé ou non fourni par le jeu : l'ingé te le dit quand il ne peut pas savoir.
 En multiclasse, ta position, l'écart au leader et les voitures devant et derrière sont ceux de ta classe
 (l'ingé connaît aussi ta place au général).
+
+## Arrêt au stand : « box box »
+
+Dis « box box » (ou « box ce tour », « je rentre au stand ») : l'ingé confirme, donne l'essence à remettre pour finir
+la course avec un tour de marge (d'après ta consommation moyenne et le temps ou les tours restants) et te demande quels
+pneus tu veux. Réponds comme tu veux (« des mediums neufs, le plein, on répare ») : il récapitule le programme.
+À l'entrée des stands, il te le rappelle (« Box, box. Pneus : mediums. Essence : 32 litres. Limiteur ! »).
+« Annule le box » ou « on reste dehors » l'annule ; sans arrêt deux tours plus tard, il tombe.
+
+Ça marche avec tous les jeux, mais l'ingé ne règle rien dans le jeu : c'est toi qui fais les réglages du menu des stands.
 
 ## Structure
 
@@ -207,7 +220,7 @@ uv run engineer.py --ask "il est à combien le mec devant ?" --snapshot sample_s
 Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj` et `version` dans `client/pyproject.toml` (le même
 numéro), lance `uv lock` dans `client`, et écris les notes dans `CHANGELOG.md` et `CHANGELOG.fr.md`. Commite, fusionne
 dans `main` et pousse `main`, puis tague ce commit `vX.Y.Z` et pousse le tag. Les releases doivent partir de `main` :
-la commande en une ligne, le bouton « Notes de version » du plugin et la vérification quotidienne avec SimHub
+la commande en une ligne, le bouton « Notes de version » du bandeau de mise à jour et la vérification quotidienne avec SimHub
 utilisent `main`. GitHub Actions :
 - vérifie que `client/uv.lock` correspond à `client/pyproject.toml` ;
 - compile le plugin avec la dernière version de SimHub et vérifie qu'il s'y charge ;
@@ -226,6 +239,7 @@ est ouverte sur le dépôt.
 
 - Réponses directes sans IA pour les questions simples (écart devant), pour gagner en latence.
 - Annonces de stratégie : fenêtre d'arrêt aux stands, voiture qui revient fort derrière.
+- « Box box » qui règle aussi le menu des stands, dans les jeux qui le permettent (iRacing, puis Le Mans Ultimate).
 
 ## Licence
 

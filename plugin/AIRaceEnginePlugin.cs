@@ -139,7 +139,7 @@ namespace AIRaceEngineer
             Updater.InstallFinished -= OfferRestart;
             Updater.InstallFinished += OfferRestart;
             if (!Updater.Installed) Updater.CheckAsync(); // en arrière-plan, n'installe rien sans clic
-            if (!Settings.WelcomeShown) ShowWelcomeWhenReady();
+            if (!Settings.WelcomeShown || Settings.NotesSeenVersion != ReleaseNotes.Current.ToString()) ShowWelcomeWhenReady();
         }
 
         public void End(PluginManager pluginManager)
@@ -247,13 +247,24 @@ namespace AIRaceEngineer
                     var main = app.MainWindow;
                     if (main == null || !main.IsVisible || main.WindowState == System.Windows.WindowState.Minimized) return;
                     timer.Stop();
-                    // Déjà ouverte par une autre instance : on le note ici aussi, sinon notre prochaine sauvegarde remettrait false
-                    if (_welcomeOpened || Settings.WelcomeShown) { Settings.WelcomeShown = true; return; }
+                    var current = ReleaseNotes.Current.ToString();
+                    // Déjà ouverte par une autre instance : on le note ici aussi, sinon notre prochaine sauvegarde remettrait l'ancien état
+                    if (_welcomeOpened) { Settings.WelcomeShown = true; Settings.NotesSeenVersion = current; return; }
+                    bool firstStart = !Settings.WelcomeShown;
+                    if (!firstStart && Settings.NotesSeenVersion == current) return;
                     _welcomeOpened = true;
+                    // Premier démarrage : la bienvenue suffit. Après une mise à jour : les nouveautés depuis la version d'avant
+                    // (absente avant la 0.5.3 : celles de la version installée seulement)
+                    Version.TryParse(Settings.NotesSeenVersion ?? "", out var seen);
                     Settings.WelcomeShown = true;
+                    Settings.NotesSeenVersion = current;
                     SettingsChanged();
-                    try { GuideWindows.ShowWelcome(activate: false); }
-                    catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] bienvenue : " + ex.Message); }
+                    try
+                    {
+                        if (firstStart) GuideWindows.ShowWelcome(activate: false);
+                        else GuideWindows.ShowReleaseNotes(afterUpdate: true, since: seen, activate: false);
+                    }
+                    catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] bienvenue / nouveautés : " + ex.Message); }
                 };
                 timer.Start();
             }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);

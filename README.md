@@ -115,8 +115,8 @@ of its page and the "Voice client and updates" section shows "Install X.Y.Z": cl
 when SimHub closes (the plugin offers to restart it right away), after its fingerprint is checked.
 No Windows permission prompt, unless SimHub's folder is protected: it is then asked for on every update.
 The voice client is updated at the same time. Windows Settings → Apps keeps showing the version installed by
-the Setup; that is expected. What changed in each version: [CHANGELOG.md](CHANGELOG.md) (the "Release notes"
-button on the plugin page opens it too).
+the Setup; that is expected. What changed in each version: [CHANGELOG.md](CHANGELOG.md). The "Release notes" button
+on the plugin page shows it inside SimHub, and after an update a "What's new" window lists what changed.
 
 **Performance**: the plugin is built to leave the machine to the game.
 - The voice client runs at "below normal" priority, and speech recognition and the offline voice use at most
@@ -152,6 +152,16 @@ it is `null` where the plugin can tell, and the engineer tells you so instead of
 TC or ABS at 0 can mean off or not reported by the game: the engineer says so when it can't tell.
 In multiclass, your position, the gap to the leader and the cars ahead and behind are all within your class
 (the engineer also knows your overall position).
+
+## Pit stops: "box box"
+
+Say "box box" (or "box this lap", "pitting this lap"): the engineer confirms, gives the fuel to add to finish the
+race with one lap of margin (from your average consumption and the time or laps left) and asks which tyres you want.
+Answer however you like ("new mediums, fill it up, fix the car"): it sums up the plan. When you enter the pit lane,
+it reminds you of it ("Box, box. Tyres: mediums. Fuel: 32 litres. Pit limiter!"). "Cancel the box" or "stay out"
+cancels it; with no stop two laps later, it is dropped.
+
+It works with every game, but the engineer doesn't set anything in the game: you set the pit menu yourself.
 
 ## Structure
 
@@ -206,7 +216,7 @@ uv run engineer.py --ask "what's the gap to the car ahead?" --snapshot sample_sn
 Publishing: bump `<Version>` in `plugin/AIRaceEngineer.csproj` and `version` in `client/pyproject.toml` (same
 number), run `uv lock` in `client`, and write the notes in `CHANGELOG.md` and `CHANGELOG.fr.md`. Commit, merge into
 `main` and push `main`, then tag that commit `vX.Y.Z` and push the tag. Releases must come from `main`: the
-one-liner, the plugin's "Release notes" button and the daily SimHub check all use `main`. GitHub Actions then:
+one-liner, the update banner's "Release notes" button and the daily SimHub check all use `main`. GitHub Actions then:
 - checks that `client/uv.lock` matches `client/pyproject.toml`;
 - builds the plugin against the latest SimHub and checks that it loads there;
 - builds the installer (WiX, pinned in `dotnet-tools.json`);
@@ -223,6 +233,7 @@ SimHub type and method it uses, and the source must still compile. If not, an is
 
 - Direct answers without AI for simple questions (gap ahead), to cut latency.
 - Strategy callouts: pit window, a car closing in fast from behind.
+- "Box box" that also sets the pit menu, in games that allow it (iRacing, then Le Mans Ultimate).
 
 ## License
 

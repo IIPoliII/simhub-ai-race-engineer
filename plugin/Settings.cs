@@ -209,6 +209,7 @@ namespace AIRaceEngineer
         public bool AutoStartClient { get; set; } = true;
         public bool PttTested { get; set; }
         public bool WelcomeShown { get; set; }   // fenêtre de bienvenue déjà montrée au premier démarrage
+        public string NotesSeenVersion { get; set; }  // dernière version dont les nouveautés ont été montrées (0.5.3+)
 
         /// <summary>Réglages abîmés au chargement : ce qui a été repris, à montrer dans la page (null sinon).</summary>
         [JsonIgnore] public Msg LoadNotice { get; private set; }

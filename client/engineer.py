@@ -154,6 +154,7 @@ class Engine:
         self.ai_issue = None     # dernière question à l'IA
         self.voice_issue = None  # voix choisie remplacée par la voix locale
         self.mic_issue = None    # dernier essai d'enregistrement
+        self.pit = None          # programme d'arrêt après « box box » (pit.PitPlan)
         # Voix locale en échec à la mise en route (--prepare) : la voix en ligne marche, mais plus de secours hors ligne
         self.local_voice_issue = None
         try:
@@ -245,8 +246,17 @@ class Engine:
             self.idle()
             return
         log(f"\n> {question}")
+        import pit
+        language = self.engineer.language
+        if self.pit and pit.CANCEL.search(question):
+            self.pit = None
+            self.say(pit.cancelled(language))
+            return
+        snap = self.snapshot()
+        if pit.BOX_CALL.search(question) and snap and snap.get("game_running"):
+            self.pit = pit.PitPlan(snap, language)  # nouvel appel : programme repris de zéro
         try:
-            answer, t_llm = timed(self.engineer.ask, question, self.snapshot())
+            answer, t_llm = timed(self.engineer.ask, question, snap, self.pit)
             self.ai_issue = None
         except Exception as e:  # réseau, clé invalide, quota...
             self.ai_issue = (f"Erreur IA : {e}", f"AI error: {e}", "error")
@@ -359,6 +369,15 @@ def run(plugin: Plugin, managed: bool):
             age_ms = event.get("age_ms", 0)
             if age_ms < MAX_EVENT_AGE_MS:
                 jobs.put(("say", event["text"], time.monotonic() - age_ms / 1000))
+
+        # Après « box box » : rappel du programme à l'entrée des stands (seulement pendant un arrêt prévu)
+        plan = engine.pit
+        if plan is not None:
+            text, done = plan.watch(plugin.snapshot())
+            if text:
+                jobs.put(("say", text, time.monotonic()))
+            if done and engine.pit is plan:
+                engine.pit = None
 
         down = ptt_seen = p["ptt"]
         if down and not recording:

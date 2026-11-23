@@ -5,6 +5,15 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.3] - 2026-11-23
+
+### Added
+- "Box box": say it on the radio and the engineer prepares your stop. It gives the fuel to add to finish with one
+  lap of margin, asks which tyres you want, sums up the plan, then reminds you of it as you enter the pit lane.
+  "Cancel the box" cancels it. Works with every game; you still set the pit menu yourself.
+- Release notes inside SimHub: the "Release notes" button in "Voice client and updates" shows them without a
+  browser, and after an update a "What's new" window lists what changed since your previous version.
+
 ## [0.5.2] - 2026-11-23
 
 ### Added
@@ -209,6 +218,7 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.5.3]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.8...v0.5.0

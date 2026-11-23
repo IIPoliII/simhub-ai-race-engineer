@@ -226,6 +226,62 @@ namespace AIRaceEngineer
         public static void ShowWelcome(bool activate) => Open(T("Bienvenue", "Welcome"), BuildWelcome, activate);
         public static void ShowWelcome() => ShowWelcome(true);
 
+        /// <summary>Notes de version. <paramref name="since"/> : après une mise à jour, seulement ce qui est nouveau depuis cette version
+        /// (null : la version installée) ; sinon tout l'historique.</summary>
+        public static void ShowReleaseNotes(bool afterUpdate, Version since = null, bool activate = true)
+        {
+            var title = afterUpdate ? T("Nouveautés", "What's new") : T("Notes de version", "Release notes");
+            Open(title, close => BuildReleaseNotes(afterUpdate, since, close), activate);
+        }
+
+        public static void ShowReleaseNotes() => ShowReleaseNotes(false);
+
+        public static FrameworkElement BuildReleaseNotes(bool afterUpdate, Version since, Action close)
+        {
+            var releases = afterUpdate ? ReleaseNotes.Since(L10n.Fr, since) : ReleaseNotes.All(L10n.Fr);
+            var body = new StackPanel();
+            bool first = true;
+            foreach (var r in releases)
+            {
+                var head = new TextBlock { FontSize = 15, FontWeight = FontWeights.SemiBold, Margin = new Thickness(0, first ? 0 : 18, 0, 6) };
+                head.Inlines.Add(new Run(r.Version.ToString()));
+                if (r.Date != null) head.Inlines.Add(new Run("  " + r.Date) { FontSize = 12, FontWeight = FontWeights.Normal, Foreground = Theme.B("Muted") });
+                body.Children.Add(head);
+                first = false;
+                foreach (var g in r.Groups)
+                {
+                    body.Children.Add(Para(g.Title, "Muted", 12, 4, 4));
+                    foreach (var item in g.Items) body.Children.Add(Bullet(item));
+                }
+            }
+            if (releases.Count == 0)
+                body.Children.Add(Para(T("Pas de notes pour cette version.", "No notes for this version."), "Muted", 13, 0, 0));
+            if (afterUpdate)
+            {
+                var more = new TextBlock { FontSize = 12, Margin = new Thickness(0, 16, 0, 0) };
+                var link = new Hyperlink(new Run(T("Toutes les versions", "All versions"))) { Foreground = Theme.B("AccentLine") };
+                link.Click += (s, e) => ShowReleaseNotes(false);
+                more.Inlines.Add(link);
+                body.Children.Add(more);
+            }
+            var title = afterUpdate
+                ? T($"Nouveautés de la {ReleaseNotes.Current}", $"What's new in {ReleaseNotes.Current}")
+                : T("Notes de version", "Release notes");
+            return Root(title, body, afterUpdate ? T("Compris", "Got it") : T("Fermer", "Close"), close);
+        }
+
+        private static FrameworkElement Bullet(string markup)
+        {
+            var g = new Grid { Margin = new Thickness(0, 0, 0, 6) };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(16) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.Children.Add(new TextBlock { Text = "•", FontSize = 13, Foreground = Theme.B("Muted") });
+            var text = Para(markup, "Text", 13, 0, 0);
+            Grid.SetColumn(text, 1);
+            g.Children.Add(text);
+            return g;
+        }
+
         public static FrameworkElement BuildGuide(string id, Action close) => BuildGuide(Guide.All[id], close);
 
         private static FrameworkElement BuildGuide(Guide g, Action close)

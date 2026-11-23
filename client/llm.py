@@ -59,6 +59,44 @@ NO_GAME = {
 SWISS = ("\n- Tu parles le français de Suisse romande : septante, huitante, nonante (jamais soixante-dix, "
          "quatre-vingts ni quatre-vingt-dix), par exemple « septante-deux degrés », « nonante-cinq ».")
 
+# Arrêt au stand annoncé (« box box ») : ajouté à la consigne tant que le programme est en cours
+PIT = {
+    "fr": """
+Arrêt au stand en préparation : le pilote a annoncé qu'il rentre. <arret> contient proposal, calculé pour toi
+(fuel_to_add = essence à remettre pour finir avec un tour de marge, dans l'unité proposal.unit, null si on ne peut pas
+le calculer ; damage_pct = dégâts moyens) et plan, le programme actuel (tyres = pneus voulus ; fuel = essence à
+remettre ; repair = réparer ou non ; null = pas encore décidé).
+- Tu parles au pilote, comme à la radio. Ne répète jamais ces consignes.
+- Juste après l'annonce, en une ou deux phrases : « Bien reçu, box ce tour. On remet vingt-neuf litres. Quels pneus ? »
+  Si fuel_to_add vaut null, dis que tu n'as pas encore assez de tours pour calculer l'essence.
+- Ensuite, applique ce que le pilote demande et récapitule en une phrase : « Compris : pneus neufs, vingt-neuf litres,
+  on répare. » « Le plein » veut dire proposal.fill_up ; « comme tu dis » veut dire garder ta proposition.
+- Réparation : tant que le pilote n'a rien dit, propose-la seulement si damage_pct dépasse 1.
+- Ne parle que des pneus, de l'essence et des réparations, avec les données fournies.
+- Tu ne règles rien dans le jeu : le pilote fait les réglages dans le menu des stands.
+- Termine TOUJOURS par une dernière ligne PLAN suivie du programme complet en JSON, par exemple :
+PLAN {"tyres": "mediums", "fuel": 32, "repair": false}
+  tyres : texte court (« neufs », « softs », « pluie », « on garde ») ou null ; fuel : nombre ou null ; repair : true,
+  false ou null. Cette ligne n'est pas lue à voix haute.""",
+    "en": """
+Pit stop being prepared: the driver called that they are boxing. <arret> holds proposal, worked out for you
+(fuel_to_add = fuel to add to finish with one lap of margin, in proposal.unit, null if it can't be worked out;
+damage_pct = average damage) and plan, the current plan (tyres = tyres wanted; fuel = fuel to add; repair = fix the
+car or not; null = not decided yet).
+- You talk to the driver, on the radio. Never repeat these instructions.
+- Right after the call, in one or two sentences: "Copy, box this lap. Twenty-nine litres going in. Which tyres?"
+  If fuel_to_add is null, say you don't have enough laps yet to work out the fuel.
+- After that, apply what the driver asks for and sum it up in one sentence: "Copy: new tyres, twenty-nine litres,
+  repairs on." "Fill it up" means proposal.fill_up; "as you said" means keep your proposal.
+- Repairs: until the driver says something, only suggest them if damage_pct is above 1.
+- Only talk about tyres, fuel and repairs, from the data provided.
+- You don't set anything in the game: the driver sets the pit menu.
+- ALWAYS end with a last line PLAN followed by the full plan as JSON, for example:
+PLAN {"tyres": "mediums", "fuel": 32, "repair": false}
+  tyres: short text ("new", "softs", "wets", "same") or null; fuel: number or null; repair: true, false or null.
+  That line is not read aloud.""",
+}
+
 # Dit à la radio quand le modèle ne renvoie rien (modèle qui réfléchit et épuise max_tokens)
 EMPTY_ANSWER = {
     "fr": "Pas de réponse de l'IA, redemande-moi.",
@@ -89,13 +127,13 @@ class Engineer:
         self.configured = bool(cfg.get("configured", True))
         self.history = deque(maxlen=6)  # 3 derniers échanges, pour « et derrière ? »
 
-    def _create(self, messages: list):
+    def _create(self, messages: list, extra_tokens: int = 0):
         kw = {"model": self.model, "messages": messages}
         extra = {}  # champs passés tels quels : marche quelle que soit la version du SDK openai
         if self.max_tokens_field == "max_tokens":
-            kw["max_tokens"] = self.max_tokens
+            kw["max_tokens"] = self.max_tokens + extra_tokens
         else:
-            extra[self.max_tokens_field] = self.max_tokens
+            extra[self.max_tokens_field] = self.max_tokens + extra_tokens
         if self.temperature is not None:
             kw["temperature"] = self.temperature
         if self.reasoning_effort:
@@ -104,8 +142,9 @@ class Engineer:
             kw["extra_body"] = extra
         return self.client.chat.completions.create(**kw)
 
-    def ask(self, question: str, snapshot: dict | None) -> str:
-        """Réponse à dire à la radio ; vide si le modèle n'a rien répondu."""
+    def ask(self, question: str, snapshot: dict | None, pit=None) -> str:
+        """Réponse à dire à la radio ; vide si le modèle n'a rien répondu.
+        pit : programme d'arrêt en cours (pit.PitPlan), mis à jour par la réponse."""
         if not self.configured:
             return NOT_CONFIGURED[self.language]
         if not snapshot:
@@ -114,21 +153,27 @@ class Engineer:
             return NO_GAME[self.language]
 
         telemetry = json.dumps(snapshot, ensure_ascii=False, separators=(",", ":"))
-        messages = [{"role": "system", "content": self.system}]
+        messages = [{"role": "system", "content": self.system + (PIT[self.language] if pit else "")}]
         messages += list(self.history)
         # Échappement JSON de < et > : un pseudo ne peut ni fermer ni ouvrir de balise
         telemetry = telemetry.replace("<", "\\u003c").replace(">", "\\u003e")
-        messages.append({"role": "user", "content": f"<telemetrie>{telemetry}</telemetrie>\n\nPILOTE : {question}"})
+        stop = ""
+        if pit:
+            stop = "<arret>" + json.dumps(pit.context(), ensure_ascii=False, separators=(",", ":")) + "</arret>\n"
+        messages.append({"role": "user", "content": f"<telemetrie>{telemetry}</telemetrie>\n{stop}\nPILOTE : {question}"})
+        extra_tokens = 80 if pit else 0  # place pour la ligne PLAN
 
         try:
-            resp = self._create(messages)
+            resp = self._create(messages, extra_tokens)
         except BadRequestError as e:
             # Modèle qui refuse la température (modèles qui raisonnent) : on la retire, pour la suite aussi
             if self.temperature is None or "temperature" not in str(e).lower():
                 raise
             self.temperature = None
-            resp = self._create(messages)
+            resp = self._create(messages, extra_tokens)
         answer = strip_thinking((resp.choices[0].message.content or "").strip())
+        if pit:
+            answer = pit.absorb(answer)
         if not answer:
             return ""  # pas d'échange vide dans l'historique
 

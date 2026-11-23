@@ -157,7 +157,7 @@ In multiclass, your position, the gap to the leader and the cars ahead and behin
 
 ## Pit stops: "box box"
 
-Say "box box" (or "box this lap", "pitting this lap"): the engineer confirms, gives the fuel to add to finish the
+Say "box box" or "pit pit" (or "box this lap", "pitting this lap"): the engineer confirms, gives the fuel to add to finish the
 race with one lap of margin (from your average consumption and the time or laps left) and asks which tyres you want.
 Answer however you like ("new mediums, fill it up, fix the car"): it sums up the plan. When you enter the pit lane,
 it reminds you of it ("Box, box. Tyres: mediums. Fuel: 32 litres. Pit limiter!"). "Cancel the box" or "stay out"

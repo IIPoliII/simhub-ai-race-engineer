@@ -412,7 +412,11 @@ class Voice:
             raise ValueError(_t("texte vide, rien à dire", "empty text, nothing to say"))
         if swiss and lang == "fr":
             text = swiss_fr(text)
+        t = time.perf_counter()
         samples, rate = self._synth(text)
+        # Pour le journal : voix lente, est-ce le service en ligne ou la voix locale de secours ?
+        online = not isinstance(self.engine, KokoroVoice) and self.warning is None
+        self.last_detail = f"{_t('en ligne', 'online') if online else _t('locale', 'local')} {time.perf_counter() - t:.2f}s"
         if self.radio:
             samples = audio.radio_fx(samples, rate, track=self.track)
         return samples, rate

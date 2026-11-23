@@ -255,6 +255,8 @@ class Engine:
         snap = self.snapshot()
         if pit.BOX_CALL.search(question) and snap and snap.get("game_running"):
             self.pit = pit.PitPlan(snap, language)  # nouvel appel : programme repris de zéro
+            # Whisper écrit parfois « Bix, bix » : l'IA, elle, doit voir l'appel tel que le pilote l'a dit
+            question = pit.normalize_call(question)
         try:
             answer, t_llm = timed(self.engineer.ask, question, snap, self.pit)
             self.ai_issue = None
@@ -272,7 +274,8 @@ class Engine:
         self.plugin.status(t("À la radio", "On the radio"), "speaking")
         try:
             (samples, rate), t_tts = timed(self.voice.render, answer)
-            log(f"< {answer}\n  [stt {t_stt:.2f}s | ia {t_llm:.2f}s | voix {t_tts:.2f}s]")
+            detail = getattr(self.voice, "last_detail", "")
+            log(f"< {answer}\n  [stt {t_stt:.2f}s | ia {t_llm:.2f}s | voix {t_tts:.2f}s{f' ({detail})' if detail else ''}]")
             audio.play(samples, rate)
         finally:
             self.idle()

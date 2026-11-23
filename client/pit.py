@@ -8,11 +8,13 @@ import math
 import re
 import threading
 
-# Ce que Whisper entend pour « box box » : « Box, box. », « Boxe boxe », « Box this lap »...
-_BOX = r"(?:box|boxe|boxes|bocks?)"
+# Ce que Whisper entend pour « box box » / « pit pit » : « Box, box. », « Boxe boxe », « Boxbox », « Bix, Bix »,
+# « Pete, Pete », « p't p't », « Box tour »...
+_BOX = r"(?:box|boxe|boxes|bocks?|boks|bix|bax|pit|pits|pitt|pete|bit|p't)"
 BOX_CALL = re.compile(
-    rf"\b{_BOX}\b[\s,.!-]*\b{_BOX}\b"
-    rf"|\b{_BOX}\s+(?:ce|cette|this)\s+(?:tour|lap)\b"
+    rf"\b{_BOX}\b[\s,.!-]*\b{_BOX}(?!\w)"
+    r"|\bboxbox\b"
+    rf"|\bbox[\s,]+(?:ce\s+|cette\s+|c'est\s+|this\s+)?(?:tour|lap)\b"
     r"|\b(?:je|on)\s+(?:rentre|rentrons|s'arrête|m'arrête)\b(?:\s+(?:au|aux)\s+stands?)?"
     r"|\bpit(?:ting)?\s+(?:this\s+lap|now|in)\b|\bboxing\b|\bwe(?:'re| are)\s+pitting\b",
     re.I)
@@ -20,6 +22,16 @@ CANCEL = re.compile(
     r"\bannul\w*\b.*\b(?:box|boxe|arrêt|stand)\b|\bon\s+reste\s+(?:dehors|en\s+piste)\b|\bpas\s+de\s+box\b"
     r"|\bcancel\b.*\b(?:box|stop|pit)\b|\bstay(?:ing)?\s+out\b|\bno\s+(?:box|stop)\b",
     re.I)
+def normalize_call(question: str) -> str:
+    """Remplace l'appel mal transcrit (« Bix, bix », « p't p't ») par « Box, box ! ». Ce qui précède l'appel est
+    écarté (souvent du bruit : « on va tester »), ce qui suit est gardé (« box box, mets des softs »)."""
+    m = BOX_CALL.search(question)
+    if not m:
+        return question
+    rest = question[m.end():].strip(" ,.!?")
+    return "Box, box !" + (" " + rest if rest else "")
+
+
 # Ligne de programme que l'IA ajoute à la fin de sa réponse en mode arrêt
 PLAN_LINE = re.compile(r"\s*PLAN\s*:?\s*(\{.*?\})\s*$", re.S)
 

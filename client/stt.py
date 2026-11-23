@@ -7,10 +7,15 @@ import numpy as np  # noqa: E402
 from faster_whisper import WhisperModel  # noqa: E402
 
 # Vocabulaire de course pour aider Whisper sur les mots techniques
+# « Box, box ! Pit, pit. » écrits tels quels : sans eux, Whisper entendait « Bix, Bix », « Pete, Pete » ou « Bit, bit »
 HINTS = {
-    "fr": "Radio course automobile. Pneus, carburant, essence, écart, devant, derrière, tour, stint, box, arrêt aux stands, pression, température, freins, dégâts.",
-    "en": "Race radio. Tyres, fuel, gap, ahead, behind, lap, stint, box, pit stop, pressures, temperatures, brakes, damage.",
+    "fr": "Radio de course. Box, box ! Pit, pit. Je rentre au stand. Combien d'essence ? Pneus, carburant, écart, devant, "
+          "derrière, tour, stint, arrêt aux stands, pression, température, freins, dégâts.",
+    "en": "Race radio. Box, box! Pit, pit. Boxing this lap. How much fuel? Tyres, gap, ahead, behind, lap, stint, "
+          "pit stop, pressures, temperatures, brakes, damage.",
 }
+# Mots poussés à chaque phrase (faster-whisper 1.0+)
+HOTWORDS = "box box, pit pit"
 
 
 class Transcriber:
@@ -38,5 +43,6 @@ class Transcriber:
             vad_filter=True,                  # coupe les silences -> moins d'hallucinations
             condition_on_previous_text=False,
             initial_prompt=HINTS.get(self.language),
+            hotwords=HOTWORDS,
         )
         return " ".join(s.text.strip() for s in segments).strip()

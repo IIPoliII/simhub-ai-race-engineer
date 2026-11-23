@@ -159,7 +159,7 @@ En multiclasse, ta position, l'écart au leader et les voitures devant et derri�
 
 ## Arrêt au stand : « box box »
 
-Dis « box box » (ou « box ce tour », « je rentre au stand ») : l'ingé confirme, donne l'essence à remettre pour finir
+Dis « box box » ou « pit pit » (ou « box ce tour », « je rentre au stand ») : l'ingé confirme, donne l'essence à remettre pour finir
 la course avec un tour de marge (d'après ta consommation moyenne et le temps ou les tours restants) et te demande quels
 pneus tu veux. Réponds comme tu veux (« des mediums neufs, le plein, on répare ») : il récapitule le programme.
 À l'entrée des stands, il te le rappelle (« Box, box. Pneus : mediums. Essence : 32 litres. Limiteur ! »).

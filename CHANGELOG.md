@@ -5,6 +5,19 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.4] - 2026-11-23
+
+### Fixed
+- Speech recognition now hears "box box" and "pit pit" (it heard "Bix, Bix" or "Pete, Pete"), and the engineer
+  recognises the call even when it is misheard.
+- When the engineer didn't understand the question, it says so and asks you to repeat, instead of answering beside
+  the point. It no longer gives orders you didn't ask for (such as "stay in the pits").
+- "Box box" early in the race, before the fuel can be worked out: the engineer asks how much fuel you want instead
+  of suggesting a full tank.
+
+### Changed
+- The log shows whether the voice came from the online service or the local voice, and how long it took.
+
 ## [0.5.3] - 2026-11-23
 
 ### Added
@@ -218,6 +231,7 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.5.4]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.2...v0.5.3
 [0.5.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.1...v0.5.2
 [0.5.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.0...v0.5.1

@@ -109,7 +109,7 @@ The voice client starts and stops with SimHub, and restarts on its own if it sto
 the "Voice client" box shows the cause, and the "Log" button opens its log.
 
 **Updates**: on startup, the plugin checks for a new version. If there is one, a banner appears at the top
-of its page: click "Install". The new version is prepared in your profile and replaces the old one
+of its page and the "Voice client and updates" section shows "Install X.Y.Z": click either one. The new version is prepared in your profile and replaces the old one
 when SimHub closes (the plugin offers to restart it right away), after its fingerprint is checked.
 No Windows permission prompt, unless SimHub's folder is protected: it is then asked for on every update.
 The voice client is updated at the same time. Windows Settings → Apps keeps showing the version installed by

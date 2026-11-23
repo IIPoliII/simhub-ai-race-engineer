@@ -110,7 +110,7 @@ Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il 
 « Client vocal » affiche la cause, et le bouton « Journal » ouvre son journal.
 
 **Mises à jour** : au démarrage, le plugin vérifie s'il existe une nouvelle version. Si oui, un bandeau apparaît en haut
-de sa page : clique sur « Installer ». La nouvelle version est préparée dans ton profil, et elle remplace l'ancienne
+de sa page et la section « Client vocal et mises à jour » affiche « Installer la X.Y.Z » : clique sur l'un ou l'autre. La nouvelle version est préparée dans ton profil, et elle remplace l'ancienne
 quand SimHub se ferme (le plugin propose de le redémarrer tout de suite), après vérification de son empreinte.
 Pas de demande d'autorisation Windows, sauf si le dossier de SimHub est protégé : elle est alors demandée à chaque
 mise à jour. Le client vocal est mis à jour en même temps. Paramètres Windows → Applications garde la version installée

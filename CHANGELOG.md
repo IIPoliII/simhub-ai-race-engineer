@@ -5,6 +5,14 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.5.1] - 2026-11-23
+
+### Changed
+- Updates: the "Voice client and updates" section at the bottom of the page now shows "Install X.Y.Z" when an
+  update is waiting, then "Restart SimHub" once it is installed, like the banner at the top. Before, it only
+  offered "Check for updates", even with an update waiting. The button appears from this version on, so for
+  the update to 0.5.1 itself, use "Install" in the banner at the top.
+
 ## [0.5.0] - 2026-11-23
 
 ### Added
@@ -186,6 +194,7 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.5.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.6...v0.4.7

@@ -48,6 +48,9 @@ namespace AIRaceEngineer
         private Grid _columns;
         private int _columnCount;
         private Button _clientButton, _clientCardButton, _installButton, _testButton, _radioButton, _listenButton, _providerHelp, _elevenHelp;
+        // Carte « Client vocal et mises à jour » : son bouton principal suit la mise à jour, comme la bannière
+        private Button _cardCheckButton, _cardInstallButton, _cardRestartButton;
+        private string _cardInstallLabel;
         private DateTime _sayClicked = DateTime.MinValue;
         private bool _saySeen, _sayBusyLast;
         private string _clientButtonLabel;
@@ -294,6 +297,7 @@ namespace AIRaceEngineer
                         : _installClicked ? "busy"
                         : u.UpdateAvailable ? "available"
                         : null;
+            RefreshCardUpdate(mode); // la carte garde « Redémarrer SimHub » même quand la bannière est fermée
             if (mode == "installed" && _bannerDismissed) mode = null;
 
             if (mode != _bannerMode)
@@ -309,6 +313,39 @@ namespace AIRaceEngineer
                 _bannerText.Text = u.Failed
                     ? u.State
                     : T($"Tu as la {u.Current}. Le client vocal est mis à jour en même temps", $"You have {u.Current}. The voice client is updated at the same time");
+        }
+
+        /// <summary>Installer de la bannière et de la carte « Client vocal et mises à jour ».</summary>
+        private void StartInstall()
+        {
+            var u = _plugin.Updater;
+            if (u.Busy || _installClicked) return; // InstallAsync ne ferait rien (recherche en cours, double clic)
+            _installClicked = true;
+            _installSeen = false;
+            _installClickedAt = DateTime.UtcNow;
+            u.InstallAsync(_plugin.Client);
+        }
+
+        /// <summary>
+        /// Bouton principal de la carte : « Installer la X » quand une mise à jour attend (grisé pendant l'installation),
+        /// « Redémarrer SimHub » quand elle est installée, sinon « Rechercher une mise à jour ».
+        /// </summary>
+        private void RefreshCardUpdate(string mode)
+        {
+            if (_cardCheckButton == null) return;
+            var u = _plugin.Updater;
+            bool install = mode == "available" || mode == "busy";
+            _cardInstallButton.Visibility = install ? Visibility.Visible : Visibility.Collapsed;
+            _cardRestartButton.Visibility = mode == "installed" ? Visibility.Visible : Visibility.Collapsed;
+            _cardCheckButton.Visibility = mode == null ? Visibility.Visible : Visibility.Collapsed;
+            if (!install) return;
+            _cardInstallButton.IsEnabled = mode == "available" && !u.Busy;
+            string label = mode == "busy" ? T("Installation...", "Installing...") : T($"Installer la {u.Latest}", $"Install {u.Latest}");
+            if (label != _cardInstallLabel)
+            {
+                _cardInstallLabel = label;
+                _cardInstallButton.Content = BtnContent(label, GDownload);
+            }
         }
 
         private void BuildBanner(string mode)
@@ -343,14 +380,7 @@ namespace AIRaceEngineer
             {
                 line = Theme.B("AccentLine"); glyph = GDownload;
                 title = T($"Version {u.Latest} disponible", $"Version {u.Latest} available");
-                buttons.Children.Add(_installButton = Btn(T("Installer", "Install"), () =>
-                {
-                    if (u.Busy || _installClicked) return; // InstallAsync ne ferait rien (recherche en cours, double clic)
-                    _installClicked = true;
-                    _installSeen = false;
-                    _installClickedAt = DateTime.UtcNow;
-                    u.InstallAsync(_plugin.Client);
-                }, "BtnPrimary", GDownload));
+                buttons.Children.Add(_installButton = Btn(T("Installer", "Install"), StartInstall, "BtnPrimary", GDownload));
                 buttons.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GLink));
             }
 
@@ -1011,7 +1041,12 @@ namespace AIRaceEngineer
             _updateState = new TextBlock { Foreground = Theme.B("Muted"), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 4, 0, 0) };
             body.Children.Add(_updateState);
             var ub = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
-            ub.Children.Add(Btn(T("Rechercher une mise à jour", "Check for updates"), () => u.CheckAsync(), "Btn", GSync));
+            // Un seul des trois est visible (RefreshCardUpdate)
+            _cardInstallLabel = null;
+            ub.Children.Add(_cardInstallButton = Btn(T("Installer", "Install"), StartInstall, "BtnPrimary", GDownload));
+            ub.Children.Add(_cardRestartButton = Btn(T("Redémarrer SimHub", "Restart SimHub"), AIRaceEnginePlugin.RestartSimHub, "BtnSuccess", GPower));
+            ub.Children.Add(_cardCheckButton = Btn(T("Rechercher une mise à jour", "Check for updates"), () => u.CheckAsync(), "Btn", GSync));
+            _cardInstallButton.Visibility = _cardRestartButton.Visibility = Visibility.Collapsed;
             ub.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GLink));
             body.Children.Add(ub);
             return card;

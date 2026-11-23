@@ -7,8 +7,8 @@ param(
     [Parameter(Mandatory)][string]$Out
 )
 $ErrorActionPreference = "Stop"
-# SimHub's code signing certificate (SimHubWPF.exe and its installer)
-$Publisher = "O=Nicolas Guilbert"
+# SimHub's code signing certificate (SimHubWPF.exe and its installer): CN and O must match exactly
+$Publisher = "Nicolas Guilbert"
 
 $zip = Get-ChildItem $Download -Filter *.zip | Select-Object -First 1
 if (-not $zip) { throw "No SimHub zip in $Download." }
@@ -18,7 +18,9 @@ $setup = Get-ChildItem "$tmp\zip" -Filter *.exe -Recurse | Select-Object -First 
 if (-not $setup) { throw "No installer in the SimHub $Version zip." }
 
 $sig = Get-AuthenticodeSignature $setup.FullName
-if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notlike "*$Publisher*") {
+# one entry per field of the subject ("CN=...", "O=...", ...), compared as a whole, not as a substring
+$fields = if ($sig.SignerCertificate) { $sig.SignerCertificate.SubjectName.Format($true) -split "\r?\n" | ForEach-Object { $_.Trim() } }
+if ($sig.Status -ne "Valid" -or $fields -notcontains "CN=$Publisher" -or $fields -notcontains "O=$Publisher") {
     throw "$($setup.Name) is not signed by SimHub's publisher ($($sig.Status), $($sig.SignerCertificate.Subject)): not running it."
 }
 

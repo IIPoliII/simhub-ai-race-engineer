@@ -1,6 +1,6 @@
 # Mêmes dépendances que pyproject.toml, pour pip (Python 3.11 ou 3.12)
 faster-whisper>=1.1
-kokoro-onnx>=0.4
+kokoro-onnx>=0.6.1
 edge-tts>=7.0
 soundfile>=0.12
 openai>=1.40

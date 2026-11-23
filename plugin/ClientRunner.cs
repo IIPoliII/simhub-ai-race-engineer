@@ -40,18 +40,33 @@ namespace AIRaceEngineer
         /// <summary>Arrêts juste après le démarrage, d'affilée : au-delà de 3 on ne relance plus tout seul.</summary>
         public int QuickExits { get; private set; }
         public bool Installed => File.Exists(Path.Combine(ClientDir, "engineer.py"));
-        public bool Running { get { var p = _process; return p != null && !p.HasExited; } }
+        public bool Running
+        {
+            get
+            {
+                var p = _process;
+                if (p == null) return false;
+                // Processus encore en train de démarrer : HasExited lèverait une exception, il compte comme lancé
+                try { return !p.HasExited; } catch (InvalidOperationException) { return true; }
+            }
+        }
+
+        /// <summary>Dossier où on installe uv, le premier que FindUv regarde.</summary>
+        private static string UvDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "bin");
 
         public static string FindUv()
         {
             var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var candidates = new[]
+            var dirs = new[] { UvDir, Path.Combine(home, ".cargo", "bin") }
+                .Concat((Environment.GetEnvironmentVariable("PATH") ?? "").Split(';').Select(p => p.Trim().Trim('"').Trim()));
+            var invalid = Path.GetInvalidPathChars();
+            foreach (var dir in dirs)
             {
-                Path.Combine(home, ".local", "bin", "uv.exe"),
-                Path.Combine(home, ".cargo", "bin", "uv.exe"),
-            }.Concat((Environment.GetEnvironmentVariable("PATH") ?? "")
-                .Split(';').Where(p => p.Trim().Length > 0).Select(p => Path.Combine(p.Trim(), "uv.exe")));
-            return candidates.FirstOrDefault(File.Exists);
+                // Entrée du PATH vide ou avec < > | : Path.Combine lèverait une exception
+                if (dir.Length == 0 || dir.IndexOfAny(invalid) >= 0) continue;
+                try { var f = Path.Combine(dir, "uv.exe"); if (File.Exists(f)) return f; } catch { }
+            }
+            return null;
         }
 
         /// <param name="manual">clic sur Démarrer : remet à zéro le compteur de plantages</param>
@@ -68,6 +83,9 @@ namespace AIRaceEngineer
                     return;
                 }
                 var uv = FindUv();
+                // --frozen : les versions du uv.lock livré avec le client, sans nouvelle résolution.
+                // Seulement s'il est là : les clients d'avant 0.5.0 (one-liner, dev) n'en ont pas.
+                string frozen = File.Exists(Path.Combine(ClientDir, "uv.lock")) ? "--frozen " : "";
                 ProcessStartInfo psi;
                 if (uv == null)
                 {
@@ -76,18 +94,20 @@ namespace AIRaceEngineer
                     _setupStep = new Msg("Première mise en route (1/2) : installation de uv, le gestionnaire Python", "First-time setup (1/2): installing uv, the Python manager");
                     psi = new ProcessStartInfo("powershell.exe",
                         "-NoProfile -NonInteractive -ExecutionPolicy Bypass -Command \"irm https://astral.sh/uv/install.ps1 | iex\"");
+                    // Là où FindUv le cherche (XDG_BIN_HOME, XDG_DATA_HOME ou HOMEDRIVE l'enverraient ailleurs)
+                    psi.EnvironmentVariables["UV_INSTALL_DIR"] = UvDir;
                 }
                 else if (!File.Exists(PreparedMarker))
                 {
                     _phase = Phase.Prepare;
                     _setupStep = new Msg("Première mise en route (2/2) : Python, dépendances et modèles de voix (~1 Go, quelques minutes)", "First-time setup (2/2): Python, dependencies and voice models (~1 GB, a few minutes)");
-                    psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --prepare");
+                    psi = new ProcessStartInfo(uv, "run " + frozen + "--no-progress engineer.py --prepare");
                 }
                 else
                 {
                     _phase = Phase.Client;
                     _setupStep = null;
-                    psi = new ProcessStartInfo(uv, "run --no-progress engineer.py --managed");
+                    psi = new ProcessStartInfo(uv, "run " + frozen + "--no-progress engineer.py --managed");
                 }
 
                 try
@@ -113,15 +133,18 @@ namespace AIRaceEngineer
                     psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
                     // Langue des messages de la mise en route (ensuite, le client suit la langue des réglages)
                     psi.EnvironmentVariables["AIR_LANG"] = L10n.Language;
+                    // Le .venv reste dans le dossier du client : c'est là que PreparedMarker le cherche
+                    psi.EnvironmentVariables.Remove("UV_PROJECT_ENVIRONMENT");
 
                     var process = new Process { StartInfo = psi, EnableRaisingEvents = true };
                     process.OutputDataReceived += (s, e) => Log(e.Data);
                     process.ErrorDataReceived += (s, e) => Log(e.Data);
                     process.Exited += (s, e) => OnExited(process);
-                    _process = process;
                     _startedAt = DateTime.UtcNow;
                     _lastError = null;
                     process.Start();
+                    // Publié une fois lancé seulement (la page lit Running sans verrou) ; OnExited attend _sync, il le verra
+                    _process = process;
                     process.BeginOutputReadLine();
                     process.BeginErrorReadLine();
                     SimHub.Logging.Current.Info($"[AI Race Engineer] {(_phase == Phase.Client ? "client vocal lancé" : "mise en route : " + _phase)} ({psi.FileName}, {ClientDir})");
@@ -148,19 +171,27 @@ namespace AIRaceEngineer
                 {
                     var step = _phase;
                     _setupStep = null;
-                    if (code == 0)
+                    // Étape réussie et son résultat bien là : on enchaîne (étape suivante, puis le client).
+                    // Sinon on s'arrête, pour ne pas relancer la même étape en boucle.
+                    if (code == 0 && (step == Phase.InstallUv ? FindUv() != null : File.Exists(PreparedMarker)))
                     {
-                        // Étape réussie : on enchaîne (étape suivante, puis le client)
                         _appendLog = true;
                         Start();
                         return;
                     }
                     QuickExits++;
-                    Fail(step == Phase.InstallUv
-                        ? new Msg($"Installation de uv impossible (code {code}). Vérifie la connexion internet puis clique Démarrer.",
-                                  $"Could not install uv (code {code}). Check the internet connection, then click Start.")
-                        : new Msg($"Mise en route du client vocal impossible (code {code})" + (_lastLine != null ? " : " + _lastLine : ". Voir le journal."),
-                                  $"Voice client setup failed (code {code})" + (_lastLine != null ? ": " + _lastLine : ". See the log.")));
+                    if (code == 0)
+                        Fail(step == Phase.InstallUv
+                            ? new Msg("uv est installé, mais introuvable. Redémarre SimHub.", "uv was installed but can't be found. Restart SimHub.")
+                            : new Msg("Mise en route terminée, mais le client vocal n'est pas prêt. Voir le journal.",
+                                      "Setup finished, but the voice client isn't ready. See the log."));
+                    else
+                        Fail(step == Phase.InstallUv
+                            ? new Msg($"Installation de uv impossible (code {code}). Vérifie la connexion internet puis clique Démarrer.",
+                                      $"Could not install uv (code {code}). Check the internet connection, then click Start.")
+                            // La consigne d'abord (la case n'affiche que deux lignes), le détail technique ensuite
+                            : new Msg($"Mise en route interrompue (code {code}). Vérifie la connexion internet puis clique Démarrer." + (_lastLine != null ? " Détail : " + _lastLine : " Voir le journal."),
+                                      $"Setup interrupted (code {code}). Check the internet connection, then click Start." + (_lastLine != null ? " Details: " + _lastLine : " See the log.")));
                     return;
                 }
                 QuickExits = DateTime.UtcNow - _startedAt < QuickExit ? QuickExits + 1 : 0;

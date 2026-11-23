@@ -16,6 +16,7 @@ namespace AIRaceEngineer
     public sealed class Guide
     {
         public string Title, Summary, Cost, Note;
+        public string WindowTitle;   // titre de la fenêtre, quand « Configurer » + Title ne se lit pas bien
         public string[] Steps;
 
         /// <summary>Guides dans la langue de la page.</summary>
@@ -45,7 +46,7 @@ namespace AIRaceEngineer
                 Title = "Cloudflare",
                 Summary = "Workers AI, l'IA de Cloudflare. Rien à payer tant que tu restes dans le quota gratuit.",
                 Cost = "Gratuit : 10 000 neurons (l'unité de Cloudflare) par jour, remis à zéro chaque jour à 00:00 UTC. Avec le modèle conseillé, " +
-                       "ça fait environ une centaine de questions par jour (davantage avec le modèle 8B). Au-delà, l'ingé ne répond plus " +
+                       "ça fait environ une centaine de questions par jour (davantage avec Gemma 4 26B). Au-delà, l'ingé ne répond plus " +
                        "aux questions jusqu'au lendemain ; les annonces automatiques continuent.",
                 Steps = new[]
                 {
@@ -60,14 +61,14 @@ namespace AIRaceEngineer
             {
                 Title = "OpenAI",
                 Summary = "Les modèles GPT, payants à l'usage, sans abonnement.",
-                Cost = "Crédits prépayés : 5 $ minimum, valables un an. Avec gpt-4.1-mini, une question coûte moins d'un dixième de centime. " +
+                Cost = "Crédits prépayés : 5 $ minimum, valables un an. Avec gpt-6-luna, une question coûte moins d'un dixième de centime. " +
                        "Un abonnement ChatGPT ne compte pas : l'API se paie à part.",
                 Steps = new[]
                 {
                     "Crée un compte sur [platform.openai.com](https://platform.openai.com/signup).",
                     "Dans [Billing](https://platform.openai.com/settings/organization/billing/overview), ajoute un moyen de paiement et achète des crédits.",
                     "Sur la page [API keys](https://platform.openai.com/api-keys), clique « Create new secret key », copie la clé (elle ne s'affiche qu'une fois) et colle-la dans Clé API.",
-                    "Garde `gpt-4.1-mini` (rapide et bon marché) et clique « Tester la connexion ».",
+                    "Garde `gpt-6-luna` (rapide et bon marché) et clique « Tester la connexion ».",
                 },
             },
             ["claude"] = new Guide
@@ -87,13 +88,15 @@ namespace AIRaceEngineer
             ["custom"] = new Guide
             {
                 Title = "IA sur ton PC (Ollama)",
+                WindowTitle = "Installer une IA sur ton PC (Ollama)",
                 Summary = "Gratuite et sans compte, mais elle utilise ta carte graphique pendant que tu joues.",
-                Cost = "Gratuit. Prends un petit modèle (3 à 4 milliards de paramètres) pour garder tes FPS : `qwen3:4b` ou `llama3.2:3b`.",
+                Cost = "Gratuit. Prends un petit modèle (3 à 4 milliards de paramètres) pour garder tes FPS : `qwen3:4b-instruct` ou `llama3.2:3b`. " +
+                       "Évite les modèles `thinking`, qui réfléchissent avant de répondre : trop lents pour la radio.",
                 Steps = new[]
                 {
                     "Installe [Ollama](https://ollama.com/download).",
-                    "Dans un terminal, télécharge un modèle : `ollama pull qwen3:4b`.",
-                    "Laisse l'URL `http://localhost:11434/v1`, sans clé, mets le même nom de modèle (`qwen3:4b`) et clique « Tester la connexion ».",
+                    "Dans un terminal, télécharge un modèle : `ollama pull qwen3:4b-instruct`.",
+                    "Laisse l'URL `http://localhost:11434/v1`, sans clé, mets le même nom de modèle (`qwen3:4b-instruct`) et clique « Tester la connexion ».",
                 },
                 Note = "LM Studio marche aussi : démarre son serveur local et mets l'URL `http://localhost:1234/v1`.",
             },
@@ -101,8 +104,8 @@ namespace AIRaceEngineer
             {
                 Title = "ElevenLabs",
                 Summary = "La voix la plus réaliste, de loin. Ça demande un peu de travail : un compte, une clé API et le choix d'une voix.",
-                Cost = "Le plan gratuit (10 000 crédits par mois, usage personnel) suffit pour essayer, pas pour rouler régulièrement : " +
-                       "le plan Starter coûte 6 $ par mois. Le plugin utilise le modèle Flash, le moins cher en crédits.",
+                Cost = "L'offre gratuite (10 000 crédits par mois, usage personnel) suffit pour essayer, pas pour rouler régulièrement : " +
+                       "l'offre Starter coûte 6 $ par mois. Le plugin utilise le modèle Flash, le moins cher en crédits.",
                 Steps = new[]
                 {
                     "Crée un compte sur [elevenlabs.io](https://elevenlabs.io/app/sign-up).",
@@ -110,7 +113,7 @@ namespace AIRaceEngineer
                     "Choisis une voix dans la [bibliothèque](https://elevenlabs.io/app/voice-library), ajoute-la à tes voix et copie son Voice ID. Colle-le dans le champ Voice ID (par défaut : George, une voix britannique).",
                     "Clique « Radio check » en haut de la page pour l'entendre.",
                 },
-                Note = "Sur le plan gratuit, certaines voix de la bibliothèque peuvent être refusées par l'API. Dans ce cas, garde George ou passe au plan Starter.",
+                Note = "Avec l'offre gratuite, certaines voix de la bibliothèque peuvent être refusées par l'API. Dans ce cas, garde George ou passe à l'offre Starter.",
             },
         };
 
@@ -138,7 +141,7 @@ namespace AIRaceEngineer
                 Title = "Cloudflare",
                 Summary = "Workers AI, Cloudflare's AI. Nothing to pay as long as you stay within the free quota.",
                 Cost = "Free: 10,000 neurons (Cloudflare's unit) per day, reset every day at 00:00 UTC. With the recommended model, " +
-                       "that's about a hundred questions a day (more with the 8B model). Beyond that, the engineer stops answering " +
+                       "that's about a hundred questions a day (more with Gemma 4 26B). Beyond that, the engineer stops answering " +
                        "questions until the next day; automatic callouts keep going.",
                 Steps = new[]
                 {
@@ -153,20 +156,20 @@ namespace AIRaceEngineer
             {
                 Title = "OpenAI",
                 Summary = "The GPT models, pay as you go, no subscription.",
-                Cost = "Prepaid credits: $5 minimum, valid for one year. With gpt-4.1-mini, a question costs less than a tenth of a cent. " +
+                Cost = "Prepaid credits: $5 minimum, valid for one year. With gpt-6-luna, a question costs less than a tenth of a cent. " +
                        "A ChatGPT subscription doesn't count: the API is paid separately.",
                 Steps = new[]
                 {
                     "Create an account on [platform.openai.com](https://platform.openai.com/signup).",
                     "In [Billing](https://platform.openai.com/settings/organization/billing/overview), add a payment method and buy credits.",
                     "On the [API keys](https://platform.openai.com/api-keys) page, click « Create new secret key », copy the key (it is shown only once) and paste it into API key.",
-                    "Keep `gpt-4.1-mini` (fast and cheap) and click « Test connection ».",
+                    "Keep `gpt-6-luna` (fast and cheap) and click « Test connection ».",
                 },
             },
             ["claude"] = new Guide
             {
                 Title = "Claude",
-                Summary = "Anthropic's models, very good in French. Pay as you go, no subscription.",
+                Summary = "Anthropic's models, natural and accurate answers. Pay as you go, no subscription.",
                 Cost = "Prepaid credits, bought in the Claude Console (the minimum is shown when you buy). " +
                        "A Claude.ai subscription doesn't count: the API is paid separately.",
                 Steps = new[]
@@ -180,13 +183,15 @@ namespace AIRaceEngineer
             ["custom"] = new Guide
             {
                 Title = "AI on your PC (Ollama)",
+                WindowTitle = "Set up an AI on your PC (Ollama)",
                 Summary = "Free and no account needed, but it uses your graphics card while you play.",
-                Cost = "Free. Pick a small model (3 to 4 billion parameters) to keep your FPS: `qwen3:4b` or `llama3.2:3b`.",
+                Cost = "Free. Pick a small model (3 to 4 billion parameters) to keep your FPS: `qwen3:4b-instruct` or `llama3.2:3b`. " +
+                       "Avoid `thinking` models, which reason before they answer: too slow for the radio.",
                 Steps = new[]
                 {
                     "Install [Ollama](https://ollama.com/download).",
-                    "In a terminal, download a model: `ollama pull qwen3:4b`.",
-                    "Leave the URL `http://localhost:11434/v1`, no key, enter the same model name (`qwen3:4b`) and click « Test connection ».",
+                    "In a terminal, download a model: `ollama pull qwen3:4b-instruct`.",
+                    "Leave the URL `http://localhost:11434/v1`, no key, enter the same model name (`qwen3:4b-instruct`) and click « Test connection ».",
                 },
                 Note = "LM Studio works too: start its local server and use the URL `http://localhost:1234/v1`.",
             },
@@ -214,7 +219,7 @@ namespace AIRaceEngineer
         public static void ShowGuide(string id)
         {
             if (!Guide.All.TryGetValue(id, out var g)) return;
-            Open(T("Configurer ", "Set up ") + g.Title, w => BuildGuide(g, w), activate: true);
+            Open(g.WindowTitle ?? T("Configurer ", "Set up ") + g.Title, w => BuildGuide(g, w), activate: true);
         }
 
         /// <param name="activate">false au démarrage de SimHub : la fenêtre ne doit pas voler le focus (un jeu en plein écran)</param>
@@ -247,23 +252,23 @@ namespace AIRaceEngineer
 
             body.Children.Add(Heading(T("1. Choisis une IA", "1. Choose an AI")));
             body.Children.Add(Para(T("C'est elle qui comprend tes questions et y répond avec la télémétrie. Les annonces automatiques n'en ont pas besoin : " +
-                                     "elles marchent déjà, sans internet. Plusieurs IA au choix, chacune avec son guide :",
+                                     "elles marchent dès que la voix est installée, même sans internet. Plusieurs IA au choix, chacune avec son guide :",
                                      "It understands your questions and answers them with the telemetry. Automatic callouts don't need it: " +
-                                     "they already work, without internet. Several AIs to choose from, each with its guide:"), "Text", 13, 0, 8));
+                                     "they work as soon as the voice is installed, even without internet. Several AIs to choose from, each with its guide:"), "Text", 13, 0, 8));
             body.Children.Add(Choice("Infomaniak", T("suisse, 1 million de crédits offerts pour commencer. Le choix par défaut.", "Swiss, 1 million free credits to start. The default choice."), "infomaniak"));
             body.Children.Add(Choice("Cloudflare", T("un quota gratuit chaque jour, sans rien payer.", "a free quota every day, nothing to pay."), "cloudflare"));
             body.Children.Add(Choice("OpenAI", T("payant à l'usage, quelques centimes par course.", "pay as you go, a few cents per race."), "openai"));
-            body.Children.Add(Choice("Claude", T("payant à l'usage, très bon en français.", "pay as you go, very good in French."), "claude"));
+            body.Children.Add(Choice("Claude", T("payant à l'usage, très bon en français.", "pay as you go, natural answers."), "claude"));
             body.Children.Add(Choice(T("Autre", "Other"), T("une IA sur ton PC (Ollama). Gratuite, mais elle prend de la carte graphique au jeu.",
                                                             "an AI on your PC (Ollama). Free, but it takes graphics card power away from the game."), "custom"));
 
             body.Children.Add(Heading(T("2. La voix", "2. The voice"), 18));
             body.Children.Add(Choice(T("En ligne", "Online"), T("par défaut. Voix Microsoft gratuites et naturelles, rien à régler.", "the default. Free, natural Microsoft voices, nothing to set up."), null));
             body.Children.Add(Choice("ElevenLabs", T("de loin la plus réaliste, mais ça demande un peu de travail : un compte, une clé API et le choix d'une voix. " +
-                                                     "Payant au-delà de l'essai gratuit.",
+                                                     "Payant au-delà de l'offre gratuite.",
                                                      "by far the most realistic, but it takes a bit of work: an account, an API key and choosing a voice. " +
-                                                     "Paid beyond the free trial."), "elevenlabs"));
-            body.Children.Add(Choice(T("Hors ligne", "Offline"), T("Kokoro, sans internet, moins naturelle en français.", "Kokoro, no internet, less natural in French."), null));
+                                                     "Paid beyond the free plan."), "elevenlabs"));
+            body.Children.Add(Choice(T("Hors ligne", "Offline"), T("Kokoro, sans internet, moins naturelle en français.", "Kokoro, no internet needed. British and American voices."), null));
 
             body.Children.Add(Heading(T("3. Le push-to-talk", "3. Push-to-talk"), 18));
             body.Children.Add(Para(T("Dans SimHub, ouvre « Controls and events », ajoute un mapping avec l'action `AIRaceEnginePlugin.PushToTalk` " +
@@ -280,8 +285,17 @@ namespace AIRaceEngineer
 
         public static readonly Brush Background = Frozen(Color.FromRgb(0x1F, 0x1F, 0x22));
 
+        // Une seule fenêtre par titre (le titre porte la langue) : un double-clic sur ? ne l'ouvre pas deux fois
+        private static readonly Dictionary<string, Window> OpenWindows = new Dictionary<string, Window>();
+
         private static void Open(string windowTitle, Func<Action, FrameworkElement> build, bool activate)
         {
+            if (OpenWindows.TryGetValue(windowTitle, out var existing))
+            {
+                if (existing.WindowState == WindowState.Minimized) existing.WindowState = WindowState.Normal;
+                if (activate) existing.Activate();
+                return;
+            }
             var app = Application.Current;
             var owner = app?.MainWindow;
             var window = new Window
@@ -297,7 +311,9 @@ namespace AIRaceEngineer
             window.Resources.MergedDictionaries.Add(Theme.Resources);
             window.SourceInitialized += (s, e) => DarkTitleBar(window);
             window.Content = build(window.Close);
+            window.Closed += (s, e) => OpenWindows.Remove(windowTitle);
             window.Show();
+            OpenWindows[windowTitle] = window;
         }
 
         /// <summary>Contenu d'une fenêtre : titre, texte qui défile, bouton de fermeture.</summary>

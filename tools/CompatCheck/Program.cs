@@ -1,6 +1,7 @@
 // Vérifie qu'un AIRaceEngineer.dll déjà compilé se chargera dans une version donnée de SimHub, sans le recompiler :
-// chaque type, méthode, propriété ou champ de SimHub qu'il utilise doit encore exister avec la même signature, et les
-// interfaces de SimHub qu'il implémente ne doivent pas avoir gagné de membre (sinon SimHub refuse de charger le plugin).
+// chaque DLL qu'il référence doit être fournie par SimHub ou .NET Framework, chaque type, méthode, propriété ou champ de
+// SimHub qu'il utilise doit encore exister avec la même signature, et les interfaces de SimHub qu'il implémente ne doivent
+// pas avoir gagné ni changé de membre (sinon SimHub refuse de charger le plugin).
 //   dotnet run --project tools/CompatCheck -- <AIRaceEngineer.dll> <dossier des DLL de SimHub>
 // Code de sortie 0 : compatible ; 1 : incompatibilités (listées) ; 2 : erreur d'utilisation.
 using Mono.Cecil;
@@ -67,10 +68,24 @@ foreach (var member in module.GetMemberReferences().Where(m => m.DeclaringType !
         problems.Add($"{(member is MethodReference ? "méthode" : "champ")} manquant(e) ou changé(e) : {member.FullName}");
 }
 
+// Chaque assembly référencé doit se trouver dans le dossier de SimHub ou dans .NET Framework : sinon le plugin ne se
+// charge pas (et les références vers une DLL que SimHub ne fournit plus seraient ignorées ci-dessus)
+foreach (var reference in module.AssemblyReferences)
+{
+    try { resolver.Resolve(reference); }
+    catch (AssemblyResolutionException) { problems.Add($"assembly introuvable dans SimHub et .NET Framework : {reference.FullName}"); }
+}
+
 // Interfaces de SimHub implémentées par le plugin (IPlugin, IDataPlugin, IWPFSettingsV2...) : chaque membre abstrait
-// doit avoir une implémentation dans la classe du plugin, ou dans une de ses classes de base.
-string Signature(MethodReference m) => m.Name + "(" + string.Join(",", m.Parameters.Select(p => p.ParameterType.FullName)) + ")";
+// doit avoir une implémentation dans la classe du plugin, ou dans une de ses classes de base, avec la même signature
+// (type de retour et ref compris), sinon le CLR refuse de charger la classe.
 string ShortName(string name) => name.Substring(name.LastIndexOf('.') + 1);
+string Signature(MethodReference m) =>
+    m.ReturnType.FullName + " " + ShortName(m.Name) + "(" + string.Join(",", m.Parameters.Select(p => p.ParameterType.FullName)) + ")";
+// Interface ou méthode générique : ses T ne se comparent pas aux types concrets du plugin, seuls le nom et le nombre de
+// paramètres comptent alors
+string Key(MethodDefinition m) =>
+    m.DeclaringType.HasGenericParameters || m.HasGenericParameters ? ShortName(m.Name) + "/" + m.Parameters.Count : Signature(m);
 
 IEnumerable<TypeDefinition> SimHubInterfaces(TypeDefinition iface)
 {
@@ -83,12 +98,13 @@ IEnumerable<TypeDefinition> SimHubInterfaces(TypeDefinition iface)
 foreach (var type in module.GetTypes().Where(t => t.IsClass && !t.IsAbstract))
 {
     var implemented = new HashSet<string>();
-    // la classe et ses classes de base du plugin lui-même
+    // la classe et ses classes de base du plugin lui-même ; seules comptent les méthodes d'instance virtuelles publiques
+    // (implémentation implicite) ou qui déclarent l'interface qu'elles implémentent (implémentation explicite)
     for (var t = type; t != null; t = t.BaseType as TypeDefinition)
-        foreach (var m in t.Methods)
+        foreach (var m in t.Methods.Where(m => !m.IsStatic && m.IsVirtual && (m.IsPublic || m.HasOverrides)))
         {
-            implemented.Add(ShortName(m.Name) + "(" + string.Join(",", m.Parameters.Select(p => p.ParameterType.FullName)) + ")");
-            implemented.Add(ShortName(m.Name) + "/" + m.Parameters.Count);   // repli si un type générique ne se compare pas
+            implemented.Add(Signature(m));
+            implemented.Add(ShortName(m.Name) + "/" + m.Parameters.Count);
         }
 
     foreach (var iface in type.Interfaces.Where(i => FromSimHub(i.InterfaceType)))
@@ -97,8 +113,8 @@ foreach (var type in module.GetTypes().Where(t => t.IsClass && !t.IsAbstract))
         foreach (var required in SimHubInterfaces(def).SelectMany(i => i.Methods).Where(m => m.IsAbstract && !m.IsStatic))
         {
             checkedCount++;
-            if (!implemented.Contains(Signature(required)) && !implemented.Contains(required.Name + "/" + required.Parameters.Count))
-                problems.Add($"{type.FullName} n'implémente pas {required.DeclaringType.FullName}.{Signature(required)}");
+            if (!implemented.Contains(Key(required)))
+                problems.Add($"{type.FullName} n'implémente pas {Signature(required)} de {required.DeclaringType.FullName}");
         }
     }
 }

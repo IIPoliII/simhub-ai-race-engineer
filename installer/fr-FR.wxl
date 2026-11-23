@@ -2,9 +2,46 @@
 <WixLocalization Culture="fr-FR" Codepage="1252" xmlns="http://wixtoolset.org/schemas/v4/wxl">
   <String Id="Lcid" Value="1036" />
   <String Id="LangCode" Value="fr" />
+  <String Id="LicenseRtf" Value="License.fr.rtf" />
   <String Id="ProductName" Value="AI Race Engineer pour SimHub" />
   <String Id="Downgrade" Value="Une version plus récente d'AI Race Engineer est déjà installée." />
   <String Id="NoSimHub" Value="SimHub est introuvable. Installe SimHub et lance-le une fois, puis relance cet installateur." />
-  <String Id="CloseSimHub" Value="SimHub est ouvert. Ferme-le, puis clique Réessayer : tu pourras le relancer à la fin de l'installation." />
+  <String Id="CloseSimHub" Value="SimHub est ouvert. Ferme-le, puis clique sur Réessayer : tu pourras le relancer à la fin de l'installation." />
+  <String Id="CloseSimHubNoLaunch" Value="SimHub est ouvert. Ferme-le, puis clique sur Réessayer." />
   <String Id="LaunchSimHub" Value="Lancer SimHub (la première fois, le plugin installe la voix : quelques minutes)" />
+
+  <!-- Textes de l'assistant de WiX (WixUI) passés au tutoiement. Les messages d'erreur de Windows Installer
+       (table Error) restent ceux de WiX. -->
+  <String Id="WelcomeEulaDlgTitle" Value="{\WixUI_Font_Title}Lis attentivement le contrat de licence de [ProductName]" />
+  <String Id="WelcomeDlgDescription" Value="L'Assistant Installation va installer [ProductName] sur l'ordinateur. Clique sur Suivant pour continuer, ou sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="WelcomeUpdateDlgDescriptionUpdate" Value="L'Assistant Installation va mettre à jour [ProductName] sur l'ordinateur. Clique sur Suivant pour continuer, ou sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="CancelDlgText" Value="Veux-tu vraiment annuler l'installation de [ProductName] ?" />
+  <String Id="PrepareDlgDescription" Value="Patiente pendant que l'Assistant Installation se prépare à te guider dans l'installation." />
+  <String Id="WaitForCostingDlgText" Value="Patiente pendant que l'Assistant Installation finit de calculer l'espace disque nécessaire." />
+  <String Id="ProgressDlgTextInstalling" Value="Patiente pendant que l'Assistant Installation installe [ProductName]." />
+  <String Id="ProgressDlgTextChanging" Value="Patiente pendant que l'Assistant Installation modifie [ProductName]." />
+  <String Id="ProgressDlgTextRepairing" Value="Patiente pendant que l'Assistant Installation répare [ProductName]." />
+  <String Id="ProgressDlgTextRemoving" Value="Patiente pendant que l'Assistant Installation supprime [ProductName]." />
+  <String Id="ProgressDlgTextUpdating" Value="Patiente pendant que l'Assistant Installation met à jour [ProductName]." />
+  <String Id="ExitDialogDescription" Value="Clique sur le bouton Terminer pour quitter l'Assistant Installation." />
+  <String Id="UserExitDescription1" Value="L'installation de [ProductName] a été interrompue. Ton système n'a pas été modifié. Pour installer ce programme plus tard, relance l'installation." />
+  <String Id="UserExitDescription2" Value="Clique sur le bouton Terminer pour quitter l'Assistant Installation." />
+  <String Id="FatalErrorDescription1" Value="Une erreur a arrêté l'Assistant Installation de [ProductName] avant la fin. Ton système n'a pas été modifié. Pour installer ce programme plus tard, relance l'Assistant Installation." />
+  <String Id="FatalErrorDescription2" Value="Clique sur le bouton Terminer pour quitter l'Assistant Installation." />
+  <String Id="ResumeDlgDescription" Value="L'Assistant Installation va terminer l'installation de [ProductName] sur l'ordinateur. Clique sur Installer pour continuer, ou sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="MaintenanceWelcomeDlgDescription" Value="L'Assistant Installation te permet de modifier la façon dont les composants de [ProductName] sont installés sur ton ordinateur, ou de le supprimer. Clique sur Suivant pour continuer, ou sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="MaintenanceTypeDlgDescription" Value="Choisis l'opération à faire." />
+  <String Id="MaintenanceTypeDlgChangeText" Value="Te permet de modifier la façon dont les composants sont installés." />
+  <String Id="MaintenanceTypeDlgRemoveText" Value="Supprime [ProductName] de ton ordinateur." />
+  <String Id="VerifyReadyDlgInstallText" Value="Clique sur Installer pour commencer l'installation. Clique sur Précédent pour vérifier ou modifier tes paramètres d'installation. Clique sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="VerifyReadyDlgChangeText" Value="Clique sur Modifier pour lancer l'installation. Clique sur Précédent pour vérifier ou modifier tes paramètres d'installation. Clique sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="VerifyReadyDlgRepairText" Value="Clique sur Réparer pour réparer l'installation de [ProductName]. Clique sur Précédent pour vérifier ou modifier tes paramètres d'installation. Clique sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="VerifyReadyDlgRemoveText" Value="Clique sur Supprimer pour supprimer [ProductName] de ton ordinateur. Clique sur Précédent pour vérifier ou modifier tes paramètres d'installation. Clique sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="VerifyReadyDlgUpdateText" Value="Clique sur Mettre à jour pour mettre à jour [ProductName] sur ton ordinateur. Clique sur Précédent pour vérifier ou modifier tes paramètres d'installation. Clique sur Annuler pour quitter l'Assistant Installation." />
+  <String Id="FilesInUseText" Value="Les applications suivantes utilisent des fichiers que cette installation doit mettre à jour. Ferme-les et clique sur Réessayer pour continuer, ou clique sur Quitter pour arrêter l'installation." />
+  <String Id="MsiRMFilesInUseText" Value="Les applications suivantes utilisent des fichiers que cette installation doit mettre à jour. Tu peux laisser l'Assistant Installation les fermer et tenter de les redémarrer, ou redémarrer l'ordinateur plus tard." />
+  <String Id="MsiRMFilesInUseDontUseRM" Value="Ne pas fermer les applications. Tu devras re&amp;démarrer l'ordinateur." />
+  <String Id="OutOfDiskDlgText" Value="Les volumes en surbrillance n'ont pas assez d'espace disque pour les composants choisis. Tu peux supprimer des fichiers de ces volumes, installer moins de composants ou choisir un autre lecteur de destination." />
+  <String Id="OutOfRbDiskDlgText" Value="Les volumes en surbrillance n'ont pas assez d'espace disque pour les composants choisis. Tu peux supprimer des fichiers de ces volumes, installer moins de composants ou choisir un autre lecteur de destination." />
+  <String Id="OutOfRbDiskDlgText2" Value="Tu peux aussi désactiver la restauration du programme d'installation : il ne pourra alors plus remettre l'ordinateur dans son état d'origine si l'installation est interrompue. Clique sur Oui si tu veux prendre ce risque." />
 </WixLocalization>

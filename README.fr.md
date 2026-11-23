@@ -31,13 +31,20 @@ Deux façons, au choix. Les deux s'occupent de tout (Python, dépendances, modè
 ### Installateur Windows
 
 Télécharge **`AIRaceEngineer-Setup.exe`** depuis la [dernière release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
-et double-clique dessus. Il demande la langue de l'installation (celle de ton Windows est présélectionnée ; anglais ou français).
+et double-clique dessus. Il demande la langue de l'installation, français ou anglais (celle de ton installation
+actuelle est présélectionnée, sinon celle de ton Windows). Pour une nouvelle installation, c'est aussi la langue
+du plugin.
 
-- Si SimHub est ouvert, l'installateur te demande de le fermer. À la fin, coche « Lancer SimHub ».
+- Si SimHub est ouvert, l'installateur te demande de le fermer. À la fin, laisse « Lancer SimHub » coché.
 - Au premier démarrage, le plugin installe la voix tout seul : [uv](https://docs.astral.sh/uv/), Python,
   la reconnaissance vocale et la voix hors ligne (~1 Go, quelques minutes). La page du plugin montre l'avancement.
-- Désinstallation : Paramètres Windows → Applications. Le plugin, le client vocal et ses modèles sont retirés,
-  tes réglages sont gardés.
+- Désinstallation : Paramètres Windows → Applications. Le plugin, le client vocal et sa voix hors ligne sont
+  retirés, tes réglages sont gardés. Des dossiers partagés restent, supprime-les à la main si rien d'autre ne s'en
+  sert : les modèles de reconnaissance vocale (~600 Mo, `%USERPROFILE%\.cache\huggingface`) et uv
+  (`%USERPROFILE%\.local\bin\uv.exe`, avec son Python et son cache dans `%APPDATA%\uv` et `%LOCALAPPDATA%\uv`).
+  Avec des accents dans ton nom d'utilisateur Windows, la voix hors ligne garde aussi une copie de ses données de
+  phonétique dans `C:\ProgramData\AIRaceEngineer` (~20 Mo).
+- Réparation : relance `AIRaceEngineer-Setup.exe` et choisis « Réparer ».
 - L'installateur n'est pas signé : Windows SmartScreen peut afficher « Windows a protégé votre ordinateur ».
   Clique « Informations complémentaires », puis « Exécuter quand même ».
 - Pour un déploiement silencieux, la release contient aussi **`AIRaceEngineer-Setup.msi`**, qui contient les deux langues
@@ -65,18 +72,21 @@ l'autorisation Windows (les droits du dossier ne sont jamais modifiés).
 ## Réglages
 
 Relance SimHub et accepte d'activer **AI Race Engineer** : il apparaît dans le menu de gauche (sinon : Settings → Plugins).
-Tout se règle dans sa page, rangée en colonnes pour tenir sur un écran. En haut, une bande d'état montre l'IA,
-le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire. Une fenêtre de bienvenue résume les choix
-au premier démarrage (le ? en haut de la page la rouvre), et le ? à côté de chaque IA et d'ElevenLabs ouvre un guide
-pas à pas : où créer le compte, quoi copier, combien ça coûte.
+Tout se règle dans sa page, rangée en colonnes pour tenir sur un écran, en français ou en anglais : la page,
+la fenêtre de bienvenue et les guides suivent le réglage Langue, et l'ingé parle cette langue aussi. En haut, une
+bande d'état montre l'IA, le client vocal, le push-to-talk et le jeu, avec ce qu'il reste à faire. Une fenêtre de
+bienvenue résume les choix au premier démarrage (le ? en haut de la page la rouvre), et le ? à côté de chaque IA et
+d'ElevenLabs ouvre un guide pas à pas : où créer le compte, quoi copier, combien ça coûte.
 
-- **Langue et voix** : français ou anglais (par défaut, la langue de ton Windows), puis le moteur de voix :
+- **Langue et voix** : français ou anglais (par défaut, la langue choisie dans l'installateur, sinon celle de ton
+  Windows), puis le moteur de voix :
   - **En ligne** (par défaut) : voix neuronales Microsoft, gratuites et très naturelles (Henri, Denise, Rémy, Antoine
     en français ; Ryan, Thomas, Sonia, Andrew, William en anglais). Sans internet, la voix hors ligne prend le relais ;
   - **Hors ligne** : Kokoro, sur ton PC (en anglais, `George` sonne très « ingé britannique ») ;
-  - **ElevenLabs** : la plus réaliste, payante.
+  - **ElevenLabs** : la plus réaliste, payante au-delà de l'offre gratuite.
 
-  Le bouton **Écouter** fait entendre la voix choisie. Effet radio et reconnaissance rapide ou précise en option.
+  Le bouton **Écouter** à côté de la voix la fait entendre ; **Radio check** en haut de la page marche avec tous
+  les moteurs, ElevenLabs compris. Effet radio et reconnaissance rapide ou précise en option.
 - **Bruits de piste** : avec l'effet radio, des F1 passent parfois derrière l'ingé, comme au muret des stands.
   Rien n'est enregistré : chaque voiture est synthétisée à chaque message (régime, passages de rapport, distance,
   effet Doppler), donc jamais deux fois le même son, et parfois aucun. Le fond baisse quand l'ingé parle pour que
@@ -88,7 +98,7 @@ pas à pas : où créer le compte, quoi copier, combien ça coûte.
   - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistralai/Ministral-3-14B-Instruct-2512`.
     Le plugin utilise l'API v2 d'Infomaniak, qui donne accès à tout leur catalogue (Mistral Small 4, Gemma 4...).
   - Cloudflare : un token API Workers AI et ton Account ID.
-- **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière,
+- **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière (en course),
   places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce montre un exemple de phrase.
 - **Push-to-talk** : dans **Controls and events**, ajoute un mapping avec l'action
   `AIRaceEnginePlugin.PushToTalk` et appuie sur le bouton de ton volant. La page du plugin montre en direct
@@ -103,11 +113,13 @@ Le client vocal démarre et s'arrête avec SimHub, et redémarre tout seul s'il 
 de sa page : clique sur « Installer ». La nouvelle version est préparée dans ton profil, et elle remplace l'ancienne
 quand SimHub se ferme (le plugin propose de le redémarrer tout de suite), après vérification de son empreinte.
 Pas de demande d'autorisation Windows, sauf si le dossier de SimHub est protégé : elle est alors demandée à chaque
-mise à jour. Le client vocal est mis à jour en même temps. Ce qui change à chaque version : [CHANGELOG.fr.md](CHANGELOG.fr.md).
+mise à jour. Le client vocal est mis à jour en même temps. Paramètres Windows → Applications garde la version installée
+par le Setup ; c'est normal. Ce qui change à chaque version : [CHANGELOG.fr.md](CHANGELOG.fr.md) (le bouton
+« Notes de version » de la page du plugin l'ouvre aussi).
 
 **Performances** : le plugin est fait pour laisser la machine au jeu.
-- Le client vocal tourne en priorité « inférieure à la normale », et la reconnaissance vocale utilise au plus
-  la moitié des cœurs (4 maximum).
+- Le client vocal tourne en priorité « inférieure à la normale », et la reconnaissance vocale et la voix hors ligne
+  utilisent au plus la moitié des cœurs (4 maximum).
 - Le client et SimHub ne s'échangent presque rien au repos : une requête qui attend qu'il se passe quelque chose
   (bouton, annonce), au lieu d'interroger en boucle.
 - La télémétrie n'est mise en forme que quand l'ingé en a besoin, et les bruits de piste coûtent quelques
@@ -130,13 +142,15 @@ Les annonces automatiques n'ont pas besoin de reconnaissance vocale ni d'IA : el
 ## Ce que l'ingé sait
 
 Session (type, piste, temps et tours restants, météo, drapeau), position, temps au tour (dernier, meilleur, delta),
-écart au leader, carburant et tours restants estimés, consommation des derniers tours, pneus (pressions,
-températures, usure), températures des freins, dégâts, TC/ABS/répartition de freinage,
+écart au leader, carburant et tours restants estimés, consommation des derniers tours (hors tours aux stands), pneus
+(pressions, températures, usure), températures des freins, dégâts, TC/ABS/répartition de freinage,
 et la voiture devant et derrière (nom, écart, derniers tours, passages aux stands).
 
 Les données dépendent du jeu. Si un jeu ne fournit pas une valeur (par exemple l'usure des pneus dans ACC),
-elle vaut `null` et l'ingé te le dit au lieu d'inventer. En multiclasse, devant et derrière désignent
-les voitures de ta classe.
+elle vaut `null` quand le plugin peut le savoir, et l'ingé te le dit au lieu d'inventer.
+TC ou ABS à 0 peut vouloir dire désactivé ou non fourni par le jeu : l'ingé te le dit quand il ne peut pas savoir.
+En multiclasse, ta position, l'écart au leader et les voitures devant et derrière sont ceux de ta classe
+(l'ingé connaît aussi ta place au général).
 
 ## Structure
 
@@ -149,6 +163,7 @@ plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   Theme.cs                thème de la page (couleurs, boutons, interrupteurs, segments)
   ClientRunner.cs         lance le client vocal en arrière-plan (et le met en route au premier démarrage)
   Guides.cs               fenêtre de bienvenue et guides ? de chaque IA
+  L10n.cs                 langue de la page : T(fr, en) et Msg (textes dans les deux langues)
   SnapshotServer.cs       mini serveur HTTP sur 127.0.0.1:8889
   Updater.cs              mises à jour depuis les releases GitHub
   LlmTester.cs            bouton « Tester la connexion »
@@ -170,23 +185,36 @@ release.ps1             [mainteneur] construit tout et publie une release (lanc�
 
 ## Développement
 
-Plugin : [.NET SDK](https://dotnet.microsoft.com/download) 8 ou plus récent (Visual Studio n'est pas nécessaire).
-SimHub fermé, puis `.\dev-install.ps1`.
+Plugin : [.NET SDK](https://dotnet.microsoft.com/download) 8 ou plus récent (Visual Studio n'est pas nécessaire) et
+SimHub dans son dossier par défaut (sinon `-SimHubDir <dossier>`). SimHub fermé, puis `.\dev-install.ps1`. Il
+n'installe que la DLL du plugin : le plugin lance toujours le client vocal installé dans
+`%LOCALAPPDATA%\AIRaceEngineer\client` (par le Setup ou la commande en une ligne), jamais celui de `client/`.
 
-Client : `cd client`, puis `uv run engineer.py` (SimHub doit tourner avec le plugin). Pour tester sans jeu :
+Client : `cd client`, puis `uv run engineer.py` (SimHub doit tourner avec le plugin). Si le client installé tourne
+aussi, désactive « Démarrer avec SimHub » et redémarre SimHub avant, sinon chaque annonce passe deux fois.
+Pour tester sans jeu :
 
 ```powershell
 uv run engineer.py --say "Box box, box box."
 uv run engineer.py --ask "il est à combien le mec devant ?" --snapshot sample_snapshot.json
 ```
 
-Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj` et écris les notes dans `CHANGELOG.md` et
-`CHANGELOG.fr.md`. Ensuite, commite, pousse, puis pousse un tag `vX.Y.Z`. GitHub Actions :
-- compile le plugin avec la dernière version de SimHub ;
+`--say` marche aussi sans SimHub. `--ask` demande SimHub lancé avec le plugin et une IA réglée, mais pas de jeu :
+`--snapshot` remplace seulement la télémétrie du jeu.
+
+Publier : monte `<Version>` dans `plugin/AIRaceEngineer.csproj` et `version` dans `client/pyproject.toml` (le même
+numéro), lance `uv lock` dans `client`, et écris les notes dans `CHANGELOG.md` et `CHANGELOG.fr.md`. Commite, fusionne
+dans `main` et pousse `main`, puis tague ce commit `vX.Y.Z` et pousse le tag. Les releases doivent partir de `main` :
+la commande en une ligne, le bouton « Notes de version » du plugin et la vérification quotidienne avec SimHub
+utilisent `main`. GitHub Actions :
+- vérifie que `client/uv.lock` correspond à `client/pyproject.toml` ;
+- compile le plugin avec la dernière version de SimHub et vérifie qu'il s'y charge ;
 - construit l'installateur (WiX, épinglé dans `dotnet-tools.json`) ;
 - publie la release.
 
-En local, `.\release.ps1 -BuildOnly` construit tout sans publier.
+En local, `.\release.ps1 -BuildOnly` construit tout sans publier. Il faut un clone git (seuls les fichiers suivis par
+git vont dans le paquet du client et le MSI : fais `git add` des nouveaux fichiers du client avant), uv, et SimHub
+dans son dossier par défaut (sinon `-SimHubDir <dossier>`).
 
 Mises à jour de SimHub : chaque jour, GitHub Actions vérifie la dernière version de SimHub. Le plugin publié doit
 encore y trouver chaque type et chaque méthode qu'il utilise, et les sources doivent encore compiler. Sinon, une issue

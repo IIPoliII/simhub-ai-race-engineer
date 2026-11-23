@@ -24,8 +24,11 @@ class Transcriber:
             compute_type=cfg.get("compute_type", "int8"),
             cpu_threads=threads,
         )
-        # Première passe à vide : la vraie première question n'attend pas le chargement
-        self.model.transcribe(np.zeros(16000, dtype=np.float32), language=language, vad_filter=False)
+        # Première passe à vide, au plus juste (une passe, sans repli de température) : la vraie première
+        # question n'attend pas la mise en route du modèle. Les segments se calculent quand on les lit.
+        segments, _ = self.model.transcribe(np.zeros(16000, dtype=np.float32), language=language, beam_size=1,
+                                            temperature=0.0, vad_filter=False, condition_on_previous_text=False)
+        list(segments)
 
     def transcribe(self, audio: np.ndarray) -> str:
         segments, _ = self.model.transcribe(

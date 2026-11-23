@@ -2,9 +2,11 @@
 <WixLocalization Culture="en-US" Codepage="1252" xmlns="http://wixtoolset.org/schemas/v4/wxl">
   <String Id="Lcid" Value="1033" />
   <String Id="LangCode" Value="en" />
+  <String Id="LicenseRtf" Value="License.rtf" />
   <String Id="ProductName" Value="AI Race Engineer for SimHub" />
   <String Id="Downgrade" Value="A newer version of AI Race Engineer is already installed." />
   <String Id="NoSimHub" Value="SimHub was not found. Install SimHub and start it once, then run this installer again." />
   <String Id="CloseSimHub" Value="SimHub is open. Close it, then click Retry: you can launch it again at the end of the setup." />
+  <String Id="CloseSimHubNoLaunch" Value="SimHub is open. Close it, then click Retry." />
   <String Id="LaunchSimHub" Value="Launch SimHub (the first time, the plugin sets up the voice: a few minutes)" />
 </WixLocalization>

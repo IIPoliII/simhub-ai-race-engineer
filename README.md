@@ -31,13 +31,18 @@ Two ways, pick one. Both take care of everything (Python, dependencies, voice mo
 ### Windows installer
 
 Download **`AIRaceEngineer-Setup.exe`** from the [latest release](https://github.com/IIPoliII/simhub-ai-race-engineer/releases/latest)
-and double-click it. It asks for the setup language (your Windows language is preselected; English or French).
+and double-click it. It asks for the setup language, English or French (the language of your current install
+is preselected, otherwise your Windows language). On a new install, it is also the plugin's language.
 
-- If SimHub is open, the installer asks you to close it. At the end, tick "Launch SimHub".
+- If SimHub is open, the installer asks you to close it. At the end, leave "Launch SimHub" ticked.
 - On the first start, the plugin sets up the voice on its own: [uv](https://docs.astral.sh/uv/), Python,
   speech recognition and the offline voice (~1 GB, a few minutes). The plugin page shows the progress.
-- Uninstall: Windows Settings → Apps. The plugin, the voice client and its models are removed;
-  your settings are kept.
+- Uninstall: Windows Settings → Apps. The plugin, the voice client and its offline voice are removed;
+  your settings are kept. Shared folders stay, delete them by hand if nothing else uses them: the speech
+  recognition models (~600 MB, `%USERPROFILE%\.cache\huggingface`) and uv (`%USERPROFILE%\.local\bin\uv.exe`,
+  with its Python and cache in `%APPDATA%\uv` and `%LOCALAPPDATA%\uv`). With accents in your Windows user name,
+  the offline voice also keeps a copy of its phonetics data in `C:\ProgramData\AIRaceEngineer` (~20 MB).
+- Repair: run `AIRaceEngineer-Setup.exe` again and choose Repair.
 - The installer is not signed: Windows SmartScreen may show "Windows protected your PC".
   Click "More info", then "Run anyway".
 - For silent deployment, the release also has **`AIRaceEngineer-Setup.msi`**, which contains both languages and picks
@@ -65,31 +70,34 @@ the installer can't copy the plugin there: use the one-liner instead, which then
 ## Settings
 
 Restart SimHub and accept enabling **AI Race Engineer**: it shows up in the left menu (otherwise: Settings → Plugins).
-Everything is set on its page (in French for now; the engineer itself speaks French or English). At the top,
+Everything is set on its page, laid out in columns to fit on one screen, in English or French: the page,
+the welcome window and the guides follow the Language setting, and the engineer speaks that language too. At the top,
 a status bar shows the AI, the voice client, push-to-talk and the game, with what is left to do. A welcome window
 sums up the choices on first start (the ? at the top of the page reopens it), and the ? next to each AI and next to
 ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it costs.
 
-- **Language and voice**: French or English (defaults to your Windows language), then the voice engine:
+- **Language and voice**: French or English (by default, the language chosen in the installer, otherwise your
+  Windows language), then the voice engine:
   - **Online** (default): Microsoft neural voices, free and very natural (Henri, Denise, Rémy, Antoine
     in French; Ryan, Thomas, Sonia, Andrew, William in English). Without internet, the offline voice takes over;
   - **Offline**: Kokoro, on your PC (in English, `George` sounds very much like a British engineer);
-  - **ElevenLabs**: the most realistic, paid.
+  - **ElevenLabs**: the most realistic, paid beyond the free plan.
 
-  The **Écouter** (Listen) button plays the chosen voice. Radio effect and fast or accurate recognition are optional.
+  The **Listen** button next to the voice plays it; **Radio check** at the top of the page works with every engine,
+  ElevenLabs included. Radio effect and fast or accurate recognition are optional.
 - **Track noise**: with the radio effect, F1 cars sometimes pass behind the engineer, like on the pit wall.
   Nothing is recorded: each car is synthesized for each message (revs, gear shifts, distance, Doppler effect),
   so it never sounds the same twice, and sometimes there is none. The background ducks when the engineer
   speaks so the voice stays perfectly clear.
 - **Artificial intelligence**: Infomaniak, Cloudflare, OpenAI, Claude, or any OpenAI-compatible API (Ollama...).
-  Once the key is pasted, the "Modèle" (Model) list fills with the provider's models, recommended ones first.
-  The **Tester la connexion** (Test connection) button checks the key and the model. If the API rejects the model,
+  Once the key is pasted, the "Model" list fills with the provider's models, recommended ones first.
+  The **Test connection** button checks the key and the model. If the API rejects the model,
   the page offers the ones it accepts in one click.
   - Infomaniak: a token with the `ai-tools` scope and the Product ID (Manager → AI Tools). Default model: `mistralai/Ministral-3-14B-Instruct-2512`.
     The plugin uses Infomaniak's v2 API, which gives access to their whole catalogue (Mistral Small 4, Gemma 4...).
   - Cloudflare: a Workers AI API token and your Account ID.
-- **Automatic callouts**: lap time compared to the previous one, best lap, gaps ahead/behind,
-  positions gained or lost, fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a sample sentence.
+- **Automatic callouts**: lap time compared to the previous one, personal best, gaps ahead/behind (in races),
+  places gained or lost, fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a sample sentence.
 - **Push-to-talk**: in **Controls and events**, add a mapping with the action
   `AIRaceEnginePlugin.PushToTalk` and press the button on your wheel. The plugin page shows live
   whether the button is detected.
@@ -97,16 +105,19 @@ ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it c
 API keys are stored encrypted (Windows DPAPI) in `%LOCALAPPDATA%\AIRaceEngineer\settings.json`.
 
 The voice client starts and stops with SimHub, and restarts on its own if it stops. If something goes wrong,
-the "Client vocal" box shows the cause, and the "Journal" (Log) button opens its log.
+the "Voice client" box shows the cause, and the "Log" button opens its log.
 
 **Updates**: on startup, the plugin checks for a new version. If there is one, a banner appears at the top
-of its page: click "Installer" (Install). The new version is prepared in your profile and replaces the old one
+of its page: click "Install". The new version is prepared in your profile and replaces the old one
 when SimHub closes (the plugin offers to restart it right away), after its fingerprint is checked.
 No Windows permission prompt, unless SimHub's folder is protected: it is then asked for on every update.
-The voice client is updated at the same time. What changed in each version: [CHANGELOG.md](CHANGELOG.md).
+The voice client is updated at the same time. Windows Settings → Apps keeps showing the version installed by
+the Setup; that is expected. What changed in each version: [CHANGELOG.md](CHANGELOG.md) (the "Release notes"
+button on the plugin page opens it too).
 
 **Performance**: the plugin is built to leave the machine to the game.
-- The voice client runs at "below normal" priority, and speech recognition uses at most half of the cores (4 max).
+- The voice client runs at "below normal" priority, and speech recognition and the offline voice use at most
+  half of the cores (4 max).
 - The client and SimHub exchange almost nothing at rest: one request that waits for something to happen
   (button, callout) instead of polling in a loop.
 - Telemetry is only formatted when the engineer needs it, and track noise costs a few tens of milliseconds
@@ -129,13 +140,15 @@ Automatic callouts need neither speech recognition nor AI: they go out right awa
 ## What the engineer knows
 
 Session (type, track, time and laps left, weather, flag), position, lap times (last, best, delta),
-gap to the leader, fuel and estimated laps left, consumption over the last laps, tyres (pressures,
-temperatures, wear), brake temperatures, damage, TC/ABS/brake bias,
+gap to the leader, fuel and estimated laps left, consumption over the last laps (pit laps left out), tyres
+(pressures, temperatures, wear), brake temperatures, damage, TC/ABS/brake bias,
 and the cars ahead and behind (name, gap, last laps, pit stops).
 
 The data depends on the game. If a game doesn't provide a value (for example tyre wear in ACC),
-it is `null` and the engineer tells you so instead of making something up. In multiclass, ahead and behind
-mean the cars in your class.
+it is `null` where the plugin can tell, and the engineer tells you so instead of making something up.
+TC or ABS at 0 can mean off or not reported by the game: the engineer says so when it can't tell.
+In multiclass, your position, the gap to the leader and the cars ahead and behind are all within your class
+(the engineer also knows your overall position).
 
 ## Structure
 
@@ -148,6 +161,7 @@ plugin/                 SimHub plugin (C#, .NET Framework 4.8)
   Theme.cs                page theme (colours, buttons, toggles, segments)
   ClientRunner.cs         runs the voice client in the background (and sets it up on first start)
   Guides.cs               welcome window and the ? guide for each AI
+  L10n.cs                 page language: T(fr, en) and Msg (texts in both languages)
   SnapshotServer.cs       small HTTP server on 127.0.0.1:8889
   Updater.cs              updates from GitHub releases
   LlmTester.cs            "Test connection" button
@@ -169,23 +183,35 @@ release.ps1             [maintainer] builds everything and publishes a release (
 
 ## Development
 
-Plugin: [.NET SDK](https://dotnet.microsoft.com/download) 8 or newer (Visual Studio is not needed).
-Close SimHub, then `.\dev-install.ps1`.
+Plugin: [.NET SDK](https://dotnet.microsoft.com/download) 8 or newer (Visual Studio is not needed) and SimHub
+in its default folder (otherwise `-SimHubDir <folder>`). Close SimHub, then `.\dev-install.ps1`. It installs only
+the plugin DLL: the plugin always runs the voice client installed in `%LOCALAPPDATA%\AIRaceEngineer\client`
+(by the Setup or the one-liner), never the one in `client/`.
 
-Client: `cd client`, then `uv run engineer.py` (SimHub must be running with the plugin). To test without a game:
+Client: `cd client`, then `uv run engineer.py` (SimHub must be running with the plugin). If the installed client
+is running too, turn off "Start with SimHub" and restart SimHub first, otherwise every callout plays twice.
+To test without a game:
 
 ```powershell
 uv run engineer.py --say "Box box, box box."
 uv run engineer.py --ask "what's the gap to the car ahead?" --snapshot sample_snapshot.json
 ```
 
-Publishing: bump `<Version>` in `plugin/AIRaceEngineer.csproj` and write the notes in `CHANGELOG.md` and
-`CHANGELOG.fr.md`. Then commit, push, and push a `vX.Y.Z` tag. GitHub Actions then:
-- builds the plugin against the latest SimHub;
+`--say` also works without SimHub. `--ask` needs SimHub running with the plugin and an AI set up, but no game:
+`--snapshot` replaces only the game telemetry.
+
+Publishing: bump `<Version>` in `plugin/AIRaceEngineer.csproj` and `version` in `client/pyproject.toml` (same
+number), run `uv lock` in `client`, and write the notes in `CHANGELOG.md` and `CHANGELOG.fr.md`. Commit, merge into
+`main` and push `main`, then tag that commit `vX.Y.Z` and push the tag. Releases must come from `main`: the
+one-liner, the plugin's "Release notes" button and the daily SimHub check all use `main`. GitHub Actions then:
+- checks that `client/uv.lock` matches `client/pyproject.toml`;
+- builds the plugin against the latest SimHub and checks that it loads there;
 - builds the installer (WiX, pinned in `dotnet-tools.json`);
 - publishes the release.
 
-Locally, `.\release.ps1 -BuildOnly` builds everything without publishing.
+Locally, `.\release.ps1 -BuildOnly` builds everything without publishing. It needs a git clone (only files tracked
+by git go into the client package and the MSI: `git add` new client files first), uv, and SimHub in its default
+folder (otherwise `-SimHubDir <folder>`).
 
 SimHub updates: every day, GitHub Actions checks the latest SimHub release. The published plugin must still find every
 SimHub type and method it uses, and the source must still compile. If not, an issue is opened on the repository.

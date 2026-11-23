@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Documents;
@@ -30,16 +31,23 @@ namespace AIRaceEngineer
         private int _catalogRev = -1;
         private TextBlock _modelHelp;
         private readonly DispatcherTimer _timer;
+        private static readonly TimeSpan Fast = TimeSpan.FromMilliseconds(200), Slow = TimeSpan.FromSeconds(1);
+        private Window _window;
+        private int _refreshErrors; // erreurs d'affichage depuis l'ouverture de la page
+        private const int MaxRefreshErrors = 5;
+        private bool _noticeDismissed;
+        private DispatcherTimer _saveTimer;
 
         private Border _banner, _aiCard, _voiceCard, _calloutsCard, _pttCard, _clientCard, _testBox;
         private string _bannerMode;
-        private bool _bannerDismissed, _installClicked;
+        private bool _bannerDismissed, _installClicked, _installSeen;
+        private DateTime _installClickedAt;
         private TextBlock _bannerText, _updateState, _pttLampText, _providerHint, _engineHint;
         private Cell _aiCell, _clientCell, _pttCell, _gameCell;
         private UniformGrid _strip;
         private Grid _columns;
         private int _columnCount;
-        private Button _clientButton, _radioButton, _listenButton, _providerHelp, _elevenHelp;
+        private Button _clientButton, _clientCardButton, _installButton, _testButton, _radioButton, _listenButton, _providerHelp, _elevenHelp;
         private DateTime _sayClicked = DateTime.MinValue;
         private bool _saySeen, _sayBusyLast;
         private string _clientButtonLabel;
@@ -47,8 +55,10 @@ namespace AIRaceEngineer
         private bool? _pttLast;
         private StackPanel _providerFields, _voiceFields, _calloutRows;
         private ComboBox _modelCombo;
+        private bool _fillingModels;
         private int _testRev = -1;
-        private string _testProvider;
+        private bool _testShown;
+        private string _testKey;
 
         public static readonly ImageSource Icon = CreateIcon(Brushes.White);
 
@@ -58,10 +68,47 @@ namespace AIRaceEngineer
             Resources.MergedDictionaries.Add(Theme.Resources);
             Build();
 
-            _timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(200) };
+            _timer = new DispatcherTimer { Interval = Fast };
             _timer.Tick += (s, e) => SafeRefresh();
-            Loaded += (s, e) => { SafeRefresh(); _timer.Start(); };
-            Unloaded += (s, e) => _timer.Stop();
+            Loaded += (s, e) => Watch(true);
+            Unloaded += (s, e) => { Watch(false); FlushPendingSave(); };
+            IsVisibleChanged += (s, e) => UpdateTimer();
+        }
+
+        /// <summary>
+        /// Suit la fenêtre de SimHub : 5 rafraîchissements par seconde au premier plan, 1 quand elle est derrière le jeu,
+        /// aucun quand elle est réduite ou cachée.
+        /// </summary>
+        private void Watch(bool loaded)
+        {
+            if (_window != null)
+            {
+                _window.StateChanged -= OnWindowChanged;
+                _window.Activated -= OnWindowChanged;
+                _window.Deactivated -= OnWindowChanged;
+            }
+            _window = loaded ? Window.GetWindow(this) : null;
+            if (_window != null)
+            {
+                _window.StateChanged += OnWindowChanged;
+                _window.Activated += OnWindowChanged;
+                _window.Deactivated += OnWindowChanged;
+            }
+            if (loaded) _refreshErrors = 0; // comme avant : une page rouverte réessaie
+            UpdateTimer();
+        }
+
+        private void OnWindowChanged(object sender, EventArgs e) => UpdateTimer();
+
+        private void UpdateTimer()
+        {
+            var w = _window;
+            if (_refreshErrors >= MaxRefreshErrors || !IsLoaded || !IsVisible || w?.WindowState == WindowState.Minimized) { _timer.Stop(); return; }
+            var interval = w == null || w.IsActive ? Fast : Slow;
+            if (_timer.Interval != interval) _timer.Interval = interval;
+            if (_timer.IsEnabled) return;
+            _timer.Start();
+            SafeRefresh(); // trop d'erreurs l'arrêtent aussitôt
         }
 
         /// <summary>Construit toute la page, dans la langue des réglages.</summary>
@@ -72,6 +119,7 @@ namespace AIRaceEngineer
             _columnCount = 0;
             _bannerMode = null;
             _bannerText = null;
+            _installButton = null;
             _clientButtonLabel = null;
             _pttLast = null;
             _sayBusyLast = false;
@@ -81,6 +129,7 @@ namespace AIRaceEngineer
             TextElement.SetFontFamily(root, Theme.Ui);
             TextElement.SetForeground(root, Theme.B("Text"));
             root.Children.Add(BuildHeader());
+            if (S.LoadNotice != null && !_noticeDismissed) root.Children.Add(BuildNotice());
             root.Children.Add(_banner = new Border { CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 16, 0, 0), BorderThickness = new Thickness(1), Visibility = Visibility.Collapsed });
             root.Children.Add(BuildStrip());
 
@@ -107,7 +156,41 @@ namespace AIRaceEngineer
             }), DispatcherPriority.Background);
         }
 
-        private void Changed() => _plugin.SettingsChanged();
+        private void Changed()
+        {
+            StopPendingSave(); // tout est enregistré d'un coup, champs texte compris
+            _plugin.SettingsChanged();
+        }
+
+        /// <summary>
+        /// Champs texte : la valeur change tout de suite en mémoire, mais on n'enregistre et n'envoie au client
+        /// qu'après une pause dans la frappe, en quittant le champ ou la page, ou quand SimHub se ferme.
+        /// </summary>
+        private void ChangedSoon()
+        {
+            if (_saveTimer == null)
+            {
+                _saveTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(600) };
+                _saveTimer.Tick += (s, e) => Changed();
+            }
+            if (!_saveTimer.IsEnabled) Dispatcher.ShutdownStarted += SaveOnShutdown;
+            _saveTimer.Stop();
+            _saveTimer.Start();
+        }
+
+        private void FlushPendingSave()
+        {
+            if (_saveTimer != null && _saveTimer.IsEnabled) Changed();
+        }
+
+        private void StopPendingSave()
+        {
+            if (_saveTimer == null || !_saveTimer.IsEnabled) return;
+            _saveTimer.Stop();
+            Dispatcher.ShutdownStarted -= SaveOnShutdown;
+        }
+
+        private void SaveOnShutdown(object sender, EventArgs e) => FlushPendingSave();
 
         // =====================================================================
         // Mise en page en colonnes
@@ -173,11 +256,42 @@ namespace AIRaceEngineer
             return grid;
         }
 
+        /// <summary>settings.json abîmé au chargement : ce qui a été repris, affiché jusqu'à ce qu'on le ferme.</summary>
+        private UIElement BuildNotice()
+        {
+            var notice = new Border
+            {
+                CornerRadius = new CornerRadius(12), Padding = new Thickness(16, 12, 16, 12), Margin = new Thickness(0, 16, 0, 0),
+                BorderThickness = new Thickness(1), Background = Theme.B("Card"), BorderBrush = Theme.B("Line"),
+            };
+            var grid = new Grid();
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            grid.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            grid.Children.Add(Glyph(GError, 16, Theme.B("Warn")));
+            var text = new TextBlock { Text = S.LoadNotice.ToString(), FontSize = 13, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(12, 0, 16, 0), VerticalAlignment = VerticalAlignment.Center };
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(text);
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, VerticalAlignment = VerticalAlignment.Center };
+            buttons.Children.Add(Btn(T("Dossier", "Folder"), () => Open(EngineerSettings.DataDir), "BtnGhost", GFolder));
+            buttons.Children.Add(Btn(T("Compris", "Got it"), () => { _noticeDismissed = true; notice.Visibility = Visibility.Collapsed; }, "BtnGhost"));
+            Grid.SetColumn(buttons, 2);
+            grid.Children.Add(buttons);
+            notice.Child = grid;
+            return notice;
+        }
+
         private void RefreshBanner()
         {
             var u = _plugin.Updater;
+            // Installation lancée d'ici : affichée tant que l'Updater y travaille (jusqu'au succès, à l'échec ou à l'annulation)
+            if (_installClicked)
+            {
+                if (u.Busy) _installSeen = true;
+                else if (_installSeen || (DateTime.UtcNow - _installClickedAt).TotalSeconds > 5) _installClicked = false;
+            }
             string mode = u.Installed ? "installed"
-                        : u.Busy && _installClicked ? "busy"
+                        : _installClicked ? "busy"
                         : u.UpdateAvailable ? "available"
                         : null;
             if (mode == "installed" && _bannerDismissed) mode = null;
@@ -187,6 +301,8 @@ namespace AIRaceEngineer
                 _bannerMode = mode;
                 BuildBanner(mode);
             }
+            // Pendant une recherche de mise à jour, Installer ne ferait rien : grisé
+            if (_installButton != null) _installButton.IsEnabled = !u.Busy;
             if (_bannerText == null) return;
             if (mode == "busy") _bannerText.Text = u.State;
             else if (mode == "available")
@@ -198,6 +314,7 @@ namespace AIRaceEngineer
         private void BuildBanner(string mode)
         {
             _bannerText = null;
+            _installButton = null;
             if (mode == null) { _banner.Visibility = Visibility.Collapsed; return; }
             var u = _plugin.Updater;
 
@@ -209,7 +326,10 @@ namespace AIRaceEngineer
             if (mode == "installed")
             {
                 line = Theme.B("Ok"); glyph = GCheck;
-                title = T($"Version {u.Latest} installée, redémarre SimHub pour l'activer", $"Version {u.Latest} installed, restart SimHub to activate it");
+                // Sans admin, la DLL n'est que préparée : elle s'installe à la fermeture de SimHub
+                title = u.Staged
+                    ? T($"Version {u.Latest} prête, redémarre SimHub pour l'installer", $"Version {u.Latest} ready, restart SimHub to install it")
+                    : T($"Version {u.Latest} installée, redémarre SimHub pour l'activer", $"Version {u.Latest} installed, restart SimHub to activate it");
                 buttons.Children.Add(Btn(T("Redémarrer SimHub", "Restart SimHub"), AIRaceEnginePlugin.RestartSimHub, "BtnSuccess", GPower));
                 buttons.Children.Add(Btn(T("Plus tard", "Later"), () => { _bannerDismissed = true; }, "BtnGhost"));
             }
@@ -223,8 +343,15 @@ namespace AIRaceEngineer
             {
                 line = Theme.B("AccentLine"); glyph = GDownload;
                 title = T($"Version {u.Latest} disponible", $"Version {u.Latest} available");
-                buttons.Children.Add(Btn(T("Installer", "Install"), () => { _installClicked = true; u.InstallAsync(_plugin.Client); }, "BtnPrimary", GDownload));
-                buttons.Children.Add(Btn(T("Nouveautés", "What's new"), () => Open($"https://github.com/{Updater.Repo}/releases"), "BtnGhost", GLink));
+                buttons.Children.Add(_installButton = Btn(T("Installer", "Install"), () =>
+                {
+                    if (u.Busy || _installClicked) return; // InstallAsync ne ferait rien (recherche en cours, double clic)
+                    _installClicked = true;
+                    _installSeen = false;
+                    _installClickedAt = DateTime.UtcNow;
+                    u.InstallAsync(_plugin.Client);
+                }, "BtnPrimary", GDownload));
+                buttons.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GLink));
             }
 
             var grid = new Grid();
@@ -261,13 +388,16 @@ namespace AIRaceEngineer
             public StackPanel Actions;
             private string _last;
 
-            public void Set(string value, string detail, Brush color)
+            /// <param name="tip">texte complet au survol, sinon le détail (il ne tient que sur deux lignes)</param>
+            public void Set(string value, string detail, Brush color, string tip = null)
             {
-                var key = value + "|" + detail + "|" + color;
+                var key = value + "|" + detail + "|" + color + "|" + tip;
                 if (key == _last) return;
                 _last = key;
                 Value.Text = value;
                 Detail.Text = detail ?? "";
+                tip = tip ?? detail;
+                Detail.ToolTip = string.IsNullOrEmpty(tip) ? null : tip;
                 Dot.Fill = color;
             }
         }
@@ -377,13 +507,13 @@ namespace AIRaceEngineer
             return c;
         }
 
-        private void RefreshStrip()
+        private void RefreshStrip(string testKey)
         {
             // IA
             var info = ProviderInfo.Get(S.Provider);
             if (S.AiConfigured)
             {
-                bool failed = _tester.Ok == false && _testProvider == S.Provider;
+                bool failed = _tester.Ok == false && _testKey == testKey;
                 _aiCell.Set(info.Name, S.ModelOrDefault() + (failed ? T(" · dernier test en échec", " · last test failed") : ""), failed ? Theme.B("Warn") : Theme.B("Ok"));
             }
             else _aiCell.Set(T("À configurer", "Not set up"), T("Choisis un fournisseur et colle ta clé", "Choose a provider and paste your key"), Theme.B("Warn"));
@@ -406,17 +536,26 @@ namespace AIRaceEngineer
                 }
             }
             else if (client.Running && client.SetupStep is string step)
-                _clientCell.Set(T("Installation", "Installing"), client.SetupDetail is string detail ? step + "\n" + detail : step, Theme.B("AccentLine"));
+            {
+                // La case n'a que deux lignes : l'étape en titre court, la ligne en direct dessous
+                // (ex. « Téléchargement de la voix : 40 % »), le texte complet au survol
+                var detail = client.SetupDetail;
+                _clientCell.Set(T("Installation", "Installing") + StepCount(step), detail ?? step, Theme.B("AccentLine"), detail != null ? step + "\n" + detail : step);
+            }
             else if (client.Running) _clientCell.Set(T("Démarrage", "Starting"), T("Le premier lancement peut prendre une minute", "The first launch can take a minute"), Theme.B("AccentLine"));
+            // Sans serveur local, le watchdog ne lance pas le client
+            else if (_plugin.ServerError != null) _clientCell.Set(T("Arrêté", "Stopped"), T($"Port {AIRaceEnginePlugin.Port} occupé : le client vocal ne peut pas se connecter", $"Port {AIRaceEnginePlugin.Port} in use: the voice client can't connect"), Theme.B("Bad"));
             else if (client.LastError != null) _clientCell.Set(T("Arrêté", "Stopped"), client.LastError, Theme.B("Bad"));
             else _clientCell.Set(T("Arrêté", "Stopped"), S.AutoStartClient ? T("Démarrage automatique dans un instant", "Starting automatically in a moment") : T("Démarrage automatique désactivé", "Automatic start is off"), Theme.B("Muted"));
 
+            // Même libellé dans la bande et dans la carte du client
             bool restart = client.Running || _plugin.ClientConnected;
             var label = restart ? T("Redémarrer", "Restart") : T("Démarrer", "Start");
             if (label != _clientButtonLabel)
             {
                 _clientButtonLabel = label;
                 _clientButton.Content = BtnContent(label, restart ? GRefresh : GPlay);
+                _clientCardButton.Content = BtnContent(label, restart ? GRefresh : GPlay);
             }
 
             // Push-to-talk
@@ -429,6 +568,13 @@ namespace AIRaceEngineer
             if (_plugin.ServerError != null) _gameCell.Set(T("Port occupé", "Port in use"), _plugin.ServerError, Theme.B("Bad"));
             else if (_plugin.GameName != null) _gameCell.Set(_plugin.GameName, _plugin.GameDetail, Theme.B("Ok"));
             else _gameCell.Set(T("En attente", "Waiting"), T("Lance une session, la télémétrie arrive toute seule", "Start a session, the telemetry comes in on its own"), Theme.B("Muted"));
+        }
+
+        /// <summary>« 2/2 » tiré de « Première mise en route (2/2) : ... », sinon rien.</summary>
+        private static string StepCount(string step)
+        {
+            int i = step.IndexOf('(');
+            return i >= 0 && i + 4 < step.Length && step[i + 2] == '/' && step[i + 4] == ')' ? " " + step.Substring(i + 1, 3) : "";
         }
 
         // =====================================================================
@@ -466,7 +612,7 @@ namespace AIRaceEngineer
             body.Children.Add(_providerFields);
             RebuildProviderFields();
 
-            var test = Btn(T("Tester la connexion", "Test connection"), RunTest, "BtnPrimary", GPlay);
+            var test = _testButton = Btn(T("Tester la connexion", "Test connection"), RunTest, "BtnPrimary", GPlay);
             test.HorizontalAlignment = HorizontalAlignment.Left;
             test.Margin = new Thickness(0, 12, 0, 0);
             body.Children.Add(test);
@@ -475,9 +621,13 @@ namespace AIRaceEngineer
             return card;
         }
 
+        /// <summary>Ce que vérifie un test (fournisseur, compte, clé, adresse, modèle) : son résultat ne vaut que pour ça.</summary>
+        private string TestKey() => ModelCatalog.KeyFor(ProviderInfo.Get(S.Provider), S.Current()) + "|" + S.ModelOrDefault();
+
         private void RunTest()
         {
-            _testProvider = S.Provider;
+            if (_tester.Busy) return; // TestAsync ignorerait l'appel : le bouton est grisé en attendant
+            _testKey = TestKey();
             _tester.TestAsync(ProviderInfo.Get(S.Provider), S.Current(), S.ModelOrDefault());
         }
 
@@ -494,19 +644,20 @@ namespace AIRaceEngineer
             RoutedEventHandler reload = (s, e) => _catalog.Refresh(info, p);
             if (info.Id == "custom")
             {
-                var url = Text(info.BaseUrl(p), v => { p.BaseUrl = v; Changed(); });
+                var url = Text(info.BaseUrl(p), v => { p.BaseUrl = v; ChangedSoon(); });
                 url.LostFocus += reload;
                 _providerFields.Children.Add(Field(T("URL de l'API", "API URL"), url, T("Ollama : http://localhost:11434/v1", "Ollama: http://localhost:11434/v1")));
             }
             if (info.AccountLabel != null)
             {
-                var account = Text(p.AccountId, v => { p.AccountId = v; Changed(); });
+                var account = Text(p.AccountId, v => { p.AccountId = v; ChangedSoon(); });
                 account.LostFocus += reload;
                 _providerFields.Children.Add(Field(info.AccountLabel, account, info.AccountHelp.ToString().TrimEnd('.')));
             }
 
             var keyHelp = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap };
-            keyHelp.Inlines.Add(new Run(info.KeyHelp.ToString().TrimEnd('.') + T(", enregistrée chiffrée sur ce PC", ", stored encrypted on this PC")));
+            // Phrase à part : l'aide du fournisseur peut parler d'un « token » (masculin) ou de rien du tout
+            keyHelp.Inlines.Add(new Run(info.KeyHelp.ToString().TrimEnd('.') + T(". Ta clé est enregistrée chiffrée sur ce PC", ". Your key is stored encrypted on this PC")));
             if (info.KeyHelpUrl != null)
             {
                 var link = new Hyperlink(new Run(T("Obtenir une clé", "Get a key"))) { Foreground = Theme.B("AccentLine") };
@@ -514,7 +665,7 @@ namespace AIRaceEngineer
                 keyHelp.Inlines.Add(new Run(" · "));
                 keyHelp.Inlines.Add(link);
             }
-            var secret = Secret(p.ApiKey, v => { p.ApiKey = v; Changed(); });
+            var secret = Secret(p.ApiKey, v => { p.ApiKey = v; ChangedSoon(); });
             secret.LostFocus += reload;
             _providerFields.Children.Add(Field(info.NeedsKey ? T("Clé API", "API key") : T("Clé (optionnelle)", "Key (optional)"), secret, keyHelp));
 
@@ -522,13 +673,14 @@ namespace AIRaceEngineer
             _modelCombo.DropDownOpened += (s, e) => _catalog.Refresh(info, p);
             _modelCombo.DropDownClosed += (s, e) => ShowModelStart();
             _modelCombo.Loaded += (s, e) => ShowModelStart();
+            _modelCombo.LostFocus += (s, e) => FlushPendingSave();
             _catalogRev = -1; // remplit la liste au prochain rafraîchissement
             FillModels();
             _modelCombo.AddHandler(TextBoxBase.TextChangedEvent, new TextChangedEventHandler((s, e) =>
             {
-                if (p.Model == _modelCombo.Text) return;
+                if (_fillingModels || p.Model == _modelCombo.Text) return;
                 p.Model = _modelCombo.Text;
-                Changed();
+                ChangedSoon();
             }));
             _modelHelp = new TextBlock { FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap };
             _providerFields.Children.Add(Field(T("Modèle", "Model"), _modelCombo, _modelHelp));
@@ -542,12 +694,26 @@ namespace AIRaceEngineer
             var p = S.Current();
             bool fresh = _catalog.Key == ModelCatalog.KeyFor(info, p);
             var models = fresh && _catalog.Models.Length > 0 ? _catalog.Models : info.Models;
+            if (_modelCombo.Items.Cast<string>().SequenceEqual(models)) return; // même liste : rien à refaire
 
-            var text = S.ModelOrDefault();
-            _modelCombo.Items.Clear();
-            foreach (var m in models) _modelCombo.Items.Add(m);
-            _modelCombo.Text = text;
-            ShowModelStart();
+            // En pleine frappe : on garde le texte tapé et le curseur
+            var box = _modelCombo.Template?.FindName("PART_EditableTextBox", _modelCombo) as TextBox;
+            bool typing = box != null && box.IsKeyboardFocused;
+            int start = typing ? box.SelectionStart : 0, length = typing ? box.SelectionLength : 0;
+            var text = typing ? _modelCombo.Text : S.ModelOrDefault();
+
+            // Items.Clear() vide le texte un instant : ni enregistrement ni config envoyée pour ça
+            _fillingModels = true;
+            try
+            {
+                _modelCombo.Items.Clear();
+                foreach (var m in models) _modelCombo.Items.Add(m);
+                _modelCombo.Text = text;
+            }
+            finally { _fillingModels = false; }
+
+            if (typing) box.Select(Math.Min(start, text.Length), Math.Min(length, Math.Max(0, text.Length - start)));
+            else ShowModelStart();
         }
 
         /// <summary>Les noms longs (« mistralai/... ») s'affichent depuis le début, pas coupés à gauche.</summary>
@@ -586,11 +752,15 @@ namespace AIRaceEngineer
             }
         }
 
-        private void RefreshTest()
+        private void RefreshTest(string testKey)
         {
-            if (_tester.Revision == _testRev) return;
+            _testButton.IsEnabled = !_tester.Busy;
+            // Le résultat ne vaut que pour la config testée : il disparaît dès qu'un champ change
+            bool shown = _tester.Revision > 0 && _testKey == testKey;
+            if (_tester.Revision == _testRev && shown == _testShown) return;
             _testRev = _tester.Revision;
-            if (_tester.Revision == 0 || _testProvider != S.Provider) { _testBox.Visibility = Visibility.Collapsed; return; }
+            _testShown = shown;
+            if (!shown) { _testBox.Visibility = Visibility.Collapsed; return; }
 
             Brush strong = _tester.Ok == true ? Theme.B("Ok") : _tester.Ok == false ? Theme.B("Bad") : Theme.B("Text2");
             Brush soft = _tester.Ok == true ? Theme.B("OkSoft") : _tester.Ok == false ? Theme.B("BadSoft") : Theme.B("Raised");
@@ -685,15 +855,15 @@ namespace AIRaceEngineer
             _engineHint.Text =
                 S.TtsEngine == "neural" ? T("Voix neuronales Microsoft, gratuites et très naturelles. Sans internet, la voix hors ligne prend le relais",
                                             "Microsoft neural voices, free and very natural. Without internet, the offline voice takes over")
-                : S.TtsEngine == "kokoro" ? T("Kokoro, sur ton PC et sans internet. Moins naturelle en français", "Kokoro, on your PC and without internet. Less natural in French")
-                : T("La plus réaliste, payante au-delà de l'essai gratuit. Demande un compte, une clé et une voix",
-                    "The most realistic, paid beyond the free trial. Needs an account, a key and a voice");
+                : S.TtsEngine == "kokoro" ? T("Kokoro, sur ton PC et sans internet. Moins naturelle en français", "Kokoro runs on your PC, no internet needed. British and American voices")
+                : T("La plus réaliste, payante au-delà de l'offre gratuite. Demande un compte, une clé et une voix",
+                    "The most realistic, paid beyond the free plan. Needs an account, a key and a voice");
             _elevenHelp.Visibility = S.TtsEngine == "elevenlabs" ? Visibility.Visible : Visibility.Collapsed;
 
             if (S.TtsEngine == "elevenlabs")
             {
-                _voiceFields.Children.Add(Field(T("Clé API", "API key"), Secret(S.ElevenLabsKey, v => { S.ElevenLabsKey = v; Changed(); }), T("Enregistrée chiffrée sur ce PC", "Stored encrypted on this PC")));
-                _voiceFields.Children.Add(Field("Voice ID", Text(S.ElevenLabsVoiceId, v => { S.ElevenLabsVoiceId = v; Changed(); }), T("Copié depuis ta bibliothèque ElevenLabs", "Copied from your ElevenLabs library")));
+                _voiceFields.Children.Add(Field(T("Clé API", "API key"), Secret(S.ElevenLabsKey, v => { S.ElevenLabsKey = v; ChangedSoon(); }), T("Enregistrée chiffrée sur ce PC", "Stored encrypted on this PC")));
+                _voiceFields.Children.Add(Field("Voice ID", Text(S.ElevenLabsVoiceId, v => { S.ElevenLabsVoiceId = v; ChangedSoon(); }), T("Copié depuis ta bibliothèque ElevenLabs", "Copied from your ElevenLabs library")));
                 return;
             }
 
@@ -702,12 +872,14 @@ namespace AIRaceEngineer
             var row = new Grid();
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            row.Children.Add(Combo(list, neural ? S.NeuralVoice : S.Voice, v =>
+            var voice = Combo(list, neural ? S.NeuralVoice : S.Voice, v =>
             {
                 if (neural) { if (Fr) S.NeuralVoiceFr = v; else S.NeuralVoiceEn = v; }
                 else { if (Fr) S.VoiceFr = v; else S.VoiceEn = v; }
                 Changed();
-            }));
+            });
+            AutomationProperties.SetName(voice, T("Voix", "Voice")); // dans une ligne : Field ne peut pas l'étiqueter
+            row.Children.Add(voice);
             var listen = _listenButton = Btn(T("Écouter", "Listen"), () => SayTest(T(
                 "Box box, ce tour-ci. Tu ressors en P4, la voiture derrière est à deux secondes.",
                 "Box box, this lap. You'll rejoin in P4, the car behind is two seconds back.")), "Btn", GPlay);
@@ -824,7 +996,8 @@ namespace AIRaceEngineer
 
             body.Children.Add(ToggleRow(T("Démarrer avec SimHub", "Start with SimHub"), T("En arrière-plan, relancé tout seul en cas de souci", "Runs in the background, restarts on its own if needed"), S.AutoStartClient, v => { S.AutoStartClient = v; Changed(); }));
             var tools = new WrapPanel { Margin = new Thickness(0, 4, 0, 0) };
-            tools.Children.Add(Btn(T("Redémarrer", "Restart"), () => _plugin.Client.Restart(), "Btn", GRefresh));
+            // Libellé (Démarrer ou Redémarrer) tenu à jour avec celui de la bande
+            tools.Children.Add(_clientCardButton = Btn(T("Redémarrer", "Restart"), () => _plugin.Client.Restart(), "Btn", GRefresh));
             tools.Children.Add(Btn(T("Journal", "Log"), () => Open(ClientRunner.LogPath), "Btn", GDoc));
             tools.Children.Add(Btn(T("Dossier", "Folder"), () => Open(EngineerSettings.DataDir), "Btn", GFolder));
             body.Children.Add(tools);
@@ -839,10 +1012,13 @@ namespace AIRaceEngineer
             body.Children.Add(_updateState);
             var ub = new WrapPanel { Margin = new Thickness(0, 8, 0, 0) };
             ub.Children.Add(Btn(T("Rechercher une mise à jour", "Check for updates"), () => u.CheckAsync(), "Btn", GSync));
-            ub.Children.Add(Btn(T("Notes de version", "Release notes"), () => Open($"https://github.com/{Updater.Repo}/blob/main/" + T("CHANGELOG.fr.md", "CHANGELOG.md")), "BtnGhost", GLink));
+            ub.Children.Add(Btn(T("Notes de version", "Release notes"), OpenReleaseNotes, "BtnGhost", GLink));
             body.Children.Add(ub);
             return card;
         }
+
+        /// <summary>Le journal des versions dans la langue de la page (bannière et carte).</summary>
+        private static void OpenReleaseNotes() => Open($"https://github.com/{Updater.Repo}/blob/main/" + T("CHANGELOG.fr.md", "CHANGELOG.md"));
 
         // =====================================================================
         // Rafraîchissement
@@ -852,10 +1028,11 @@ namespace AIRaceEngineer
         {
             try
             {
+                var testKey = TestKey();
                 RefreshBanner();
-                RefreshStrip();
+                RefreshStrip(testKey);
                 RefreshPtt();
-                RefreshTest();
+                RefreshTest(testKey);
                 RefreshModels();
                 RefreshSayButtons();
                 var state = (_plugin.Updater.State ?? "").TrimEnd('.');
@@ -864,9 +1041,10 @@ namespace AIRaceEngineer
             }
             catch (Exception ex)
             {
-                // Une erreur d'affichage ne doit jamais faire tomber SimHub
-                _timer.Stop();
+                // Une erreur d'affichage ne doit jamais faire tomber SimHub. Une erreur passagère (un état lu pendant
+                // qu'un autre thread le change) ne fige pas la page : le rafraîchissement s'arrête à la 5e (journal court)
                 SimHub.Logging.Current.Error("[AI Race Engineer] page : " + ex);
+                if (++_refreshErrors >= MaxRefreshErrors) _timer.Stop();
             }
         }
 
@@ -907,7 +1085,10 @@ namespace AIRaceEngineer
             var g = new Grid { Margin = new Thickness(0, 4, 0, 8) };
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(112) });
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
-            g.Children.Add(new TextBlock { Text = label, FontSize = 13, Foreground = Theme.B("Text2"), Margin = new Thickness(0, 6, 12, 0), TextWrapping = TextWrapping.Wrap });
+            var name = new TextBlock { Text = label, FontSize = 13, Foreground = Theme.B("Text2"), Margin = new Thickness(0, 6, 12, 0), TextWrapping = TextWrapping.Wrap };
+            g.Children.Add(name);
+            // Lecteurs d'écran : le champ porte le nom de son libellé
+            if (control is Control) AutomationProperties.SetLabeledBy(control, name);
 
             var right = new StackPanel();
             right.Children.Add(control);
@@ -936,6 +1117,9 @@ namespace AIRaceEngineer
             g.Children.Add(left);
 
             var toggle = new CheckBox { Style = Theme.S("Toggle"), IsChecked = value };
+            // L'interrupteur n'a pas de texte : les lecteurs d'écran lisent le titre de la ligne
+            AutomationProperties.SetName(toggle, title);
+            if (detail != null) AutomationProperties.SetHelpText(toggle, detail);
             toggle.Checked += (s, e) => onChange(true);
             toggle.Unchecked += (s, e) => onChange(false);
             Grid.SetColumn(toggle, 1);
@@ -981,7 +1165,7 @@ namespace AIRaceEngineer
         {
             var b = new Button { Style = Theme.S(style), Content = BtnContent(text, glyph) };
             if (small) { b.Padding = new Thickness(8, 4, 8, 4); b.FontSize = 12; }
-            b.Click += (s, e) => onClick();
+            b.Click += (s, e) => SafeClick(onClick);
             return b;
         }
 
@@ -989,8 +1173,15 @@ namespace AIRaceEngineer
         private static Button Help(string tooltip, Action onClick)
         {
             var b = new Button { Style = Theme.S("BtnHelp"), Content = "?", ToolTip = tooltip, VerticalAlignment = VerticalAlignment.Center };
-            b.Click += (s, e) => onClick();
+            b.Click += (s, e) => SafeClick(onClick);
             return b;
+        }
+
+        /// <summary>Un clic en erreur ne doit jamais remonter jusqu'à SimHub : l'erreur va dans son journal.</summary>
+        private static void SafeClick(Action onClick)
+        {
+            try { onClick(); }
+            catch (Exception ex) { SimHub.Logging.Current.Error("[AI Race Engineer] bouton : " + ex); }
         }
 
         private static ComboBox Combo((string Value, string Label)[] items, string selected, Action<string> onChange)
@@ -1006,17 +1197,20 @@ namespace AIRaceEngineer
             return combo;
         }
 
-        private static TextBox Text(string value, Action<string> onChange)
+        /// <summary>Champ texte : onChange à chaque frappe (avec ChangedSoon), enregistré en quittant le champ.</summary>
+        private TextBox Text(string value, Action<string> onChange)
         {
             var t = new TextBox { Text = value ?? "", HorizontalAlignment = HorizontalAlignment.Stretch };
             t.TextChanged += (s, e) => onChange(t.Text);
+            t.LostFocus += (s, e) => FlushPendingSave();
             return t;
         }
 
-        private static PasswordBox Secret(string value, Action<string> onChange)
+        private PasswordBox Secret(string value, Action<string> onChange)
         {
             var p = new PasswordBox { Password = value ?? "", HorizontalAlignment = HorizontalAlignment.Stretch };
             p.PasswordChanged += (s, e) => onChange(p.Password);
+            p.LostFocus += (s, e) => FlushPendingSave();
             return p;
         }
 

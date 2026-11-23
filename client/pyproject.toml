@@ -1,11 +1,11 @@
 [project]
 name = "ai-race-engineer"
-version = "0.1.0"
-description = "Ingénieur de course IA vocal pour SimHub (tous les jeux)"
+version = "0.5.0"   # = version du plugin (plugin/AIRaceEngineer.csproj) ; après un changement : uv lock
+description = "AI Race Engineer: voice client for SimHub (all games) / client vocal pour SimHub (tous les jeux)"
 requires-python = ">=3.11,<3.13"
 dependencies = [
     "faster-whisper>=1.1",   # reconnaissance vocale locale (gratuit)
-    "kokoro-onnx>=0.4",      # voix locale (gratuit, hors ligne)
+    "kokoro-onnx>=0.6.1",    # voix locale (gratuit, hors ligne) ; Kokoro.from_session pour régler les fils
     "edge-tts>=7.0",         # voix neuronales Microsoft (gratuit, en ligne)
     "soundfile>=0.12",       # décodage MP3 des voix en ligne
     "openai>=1.40",          # client compatible Infomaniak / OpenAI / Claude / Ollama

@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json;
 
 namespace AIRaceEngineer
@@ -35,14 +36,16 @@ namespace AIRaceEngineer
                 Models = new[] { "mistralai/Ministral-3-14B-Instruct-2512", "mistralai/Mistral-Small-4-119B-2603", "google/gemma-4-31B-it" },
                 AccountLabel = "Product ID", AccountHelp = new Msg("Manager Infomaniak → AI Tools : le numéro du produit.", "Infomaniak Manager → AI Tools: the product number."),
                 KeyHelp = new Msg("Token API avec le scope « ai-tools ».", "API token with the ai-tools scope."),
-                KeyHelpUrl = new Msg("https://www.infomaniak.com/fr/hebergement/ai-tools", "https://www.infomaniak.com/en/hosting/ai-tools"),
+                // La page des tokens API, comme dans le guide (l'ancienne page produit est devenue « AI Services »)
+                KeyHelpUrl = "https://manager.infomaniak.com/v3/ng/profile/user/token/list",
                 // API v2 : accepte tout le catalogue (la v1 ne connaît que mistral3, mistral24b et qwen3)
                 BaseUrl = p => $"https://api.infomaniak.com/2/ai/{p.AccountId.Trim()}/openai/v1",
             },
             new ProviderInfo
             {
                 Id = "cloudflare", Name = "Cloudflare", Tagline = new Msg("Workers AI · quota gratuit / jour", "Workers AI · free daily quota"),
-                Models = new[] { "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/meta/llama-3.1-8b-instruct-fast", "@cf/mistralai/mistral-small-3.1-24b-instruct" },
+                // Le Llama 8B « -fast » a quitté le catalogue : Gemma 4 26B (4B actifs) coûte bien moins de neurons
+                Models = new[] { "@cf/meta/llama-3.3-70b-instruct-fp8-fast", "@cf/google/gemma-4-26b-a4b-it", "@cf/mistralai/mistral-small-3.1-24b-instruct" },
                 AccountLabel = "Account ID", AccountHelp = new Msg("Tableau de bord Cloudflare → Workers AI.", "Cloudflare dashboard → Workers AI."),
                 KeyHelp = new Msg("Token API avec la permission « Workers AI ».", "API token with the Workers AI permission."),
                 KeyHelpUrl = "https://dash.cloudflare.com/profile/api-tokens",
@@ -51,29 +54,63 @@ namespace AIRaceEngineer
             new ProviderInfo
             {
                 Id = "openai", Name = "OpenAI", Tagline = new Msg("GPT · quelques centimes / course", "GPT · a few cents / race"),
-                Models = new[] { "gpt-4.1-mini", "gpt-4.1-nano", "gpt-4o-mini" },
+                // gpt-4.1-nano est retiré, gpt-4.1-mini et gpt-4o-mini le sont le 14/01/2027 ; Luna : le moins cher, raisonnement coupé
+                Models = new[] { "gpt-6-luna", "gpt-6.1-terra" },
                 KeyHelp = new Msg("Clé API de ton compte OpenAI.", "API key from your OpenAI account."),
                 KeyHelpUrl = "https://platform.openai.com/api-keys",
                 BaseUrl = p => "https://api.openai.com/v1",
             },
             new ProviderInfo
             {
-                Id = "claude", Name = "Claude", Tagline = new Msg("Anthropic · très bon en français", "Anthropic · very good in French"),
+                Id = "claude", Name = "Claude", Tagline = new Msg("Anthropic · très bon en français", "Anthropic · natural, accurate answers"),
                 Models = new[] { "claude-haiku-5-5", "claude-sonnet-5-5" },
-                KeyHelp = new Msg("Clé API de la console Anthropic.", "API key from the Anthropic console."),
+                KeyHelp = new Msg("Clé API de la Console Claude.", "API key from the Claude Console."),
                 KeyHelpUrl = "https://platform.claude.com/settings/keys",
                 BaseUrl = p => "https://api.anthropic.com/v1/",
             },
             new ProviderInfo
             {
                 Id = "custom", Name = new Msg("Autre", "Other"), Tagline = new Msg("Ollama, LM Studio, API compatible", "Ollama, LM Studio, compatible API"),
-                Models = new[] { "qwen3:4b", "llama3.2:3b", "mistral-small3.2" },
+                // Petits modèles qui répondent sans réfléchir (« qwen3:4b » est devenu la version thinking)
+                Models = new[] { "qwen3:4b-instruct", "llama3.2:3b", "gemma3:4b" },
                 NeedsKey = false, KeyHelp = new Msg("Souvent inutile en local.", "Usually not needed locally."),
                 BaseUrl = p => string.IsNullOrWhiteSpace(p.BaseUrl) ? "http://localhost:11434/v1" : p.BaseUrl.Trim(),
             },
         };
 
         public static ProviderInfo Get(string id) => All.FirstOrDefault(p => p.Id == id) ?? All[0];
+
+        /// <summary>Paramètres de la requête pour ce modèle : les mêmes pour le client vocal et pour « Tester la connexion ».</summary>
+        public LlmRequest RequestFor(string model)
+        {
+            model = (model ?? "").Trim();
+            if (Id == "claude")
+                // Claude 5 réfléchit toujours par l'API compatible OpenAI (reasoning_effort y est ignoré) : de la marge pour
+                // la réflexion, le prompt garde les réponses courtes. Pas de temperature : refusée sous 1 depuis Claude 4.7
+                return new LlmRequest { MaxTokens = 1024, Temperature = null };
+            if (Id == "openai")
+            {
+                // max_tokens est refusé par les modèles qui raisonnent ; max_completion_tokens passe partout chez OpenAI
+                var r = new LlmRequest { MaxTokensField = "max_completion_tokens" };
+                if (Regex.IsMatch(model, "^(o[0-9]|gpt-[5-9])"))
+                {
+                    // Raisonnement coupé quand le modèle le permet (Luna, Terra), sinon au plus bas ; pas de temperature
+                    r.ReasoningEffort = model.Contains("luna") || model.Contains("terra") ? "none" : "low";
+                    r.MaxTokens = 1024;
+                    r.Temperature = null;
+                }
+                return r;
+            }
+            return new LlmRequest();
+        }
+    }
+
+    public sealed class LlmRequest
+    {
+        public int MaxTokens = 120;                    // une ou deux phrases à la radio
+        public string MaxTokensField = "max_tokens";
+        public double? Temperature = 0.3;              // null : pas envoyée
+        public string ReasoningEffort;                 // null : pas envoyé
     }
 
     public class VoiceInfo
@@ -103,7 +140,7 @@ namespace AIRaceEngineer
             new VoiceInfo { Language = "en", Id = "en-GB-ThomasNeural", Label = "Thomas (British, male)" },
             new VoiceInfo { Language = "en", Id = "en-GB-SoniaNeural", Label = "Sonia (British, female)" },
             new VoiceInfo { Language = "en", Id = "en-US-AndrewNeural", Label = "Andrew (American, male)" },
-            new VoiceInfo { Language = "en", Id = "en-AU-WilliamNeural", Label = "William (Australian, male)" },
+            new VoiceInfo { Language = "en", Id = "en-AU-WilliamMultilingualNeural", Label = "William (Australian, male)" },
         };
     }
 
@@ -156,6 +193,9 @@ namespace AIRaceEngineer
         public bool PttTested { get; set; }
         public bool WelcomeShown { get; set; }   // fenêtre de bienvenue déjà montrée au premier démarrage
 
+        /// <summary>Réglages abîmés au chargement : ce qui a été repris, à montrer dans la page (null sinon).</summary>
+        [JsonIgnore] public Msg LoadNotice { get; private set; }
+
         public ProviderSettings Current(string id = null)
         {
             id = id ?? Provider;
@@ -190,32 +230,111 @@ namespace AIRaceEngineer
 
         public static string DataDir => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "AIRaceEngineer");
         private static string FilePath => Path.Combine(DataDir, "settings.json");
+        private static string BackupPath => FilePath + ".bak";   // version précédente, gardée à chaque enregistrement
+        private static string BadPath => FilePath + ".bad";      // fichier illisible mis de côté
+        private static string TempPath => FilePath + ".tmp";     // nouvelle version en cours d'enregistrement
+        private const int CurrentVersion = 3;                     // voir Migrate()
 
         public static EngineerSettings Load()
         {
+            if (!File.Exists(FilePath)) return Resume() ?? new EngineerSettings { SettingsVersion = CurrentVersion };
+            var s = Read(FilePath, out var error);
+            if (s != null) return s;
+
+            // Fichier abîmé (coupure pendant un enregistrement...) : on le garde de côté au lieu de l'écraser,
+            // puis on reprend la version précédente si elle se lit
+            SimHub.Logging.Current.Warn("[AI Race Engineer] réglages illisibles : " + error);
+            bool kept = false;
+            try { File.Copy(FilePath, BadPath, true); kept = true; }
+            catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] copie de settings.json impossible : " + ex.Message); }
+            var where = kept ? new Msg(@" L'ancien fichier est gardé dans %LOCALAPPDATA%\AIRaceEngineer (settings.json.bad).", @" The old file is kept in %LOCALAPPDATA%\AIRaceEngineer (settings.json.bad).")
+                             : new Msg("", "");
+
+            s = File.Exists(BackupPath) ? Read(BackupPath, out _) : null;
+            // Le fichier abîmé ne reste pas en place, sinon l'avertissement reviendrait à chaque démarrage
             try
             {
-                if (File.Exists(FilePath))
+                if (s != null) File.Copy(BackupPath, FilePath, true);
+                else if (kept) File.Delete(FilePath);
+            }
+            catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] remise en état de settings.json impossible : " + ex.Message); }
+            if (s != null)
+            {
+                SimHub.Logging.Current.Warn("[AI Race Engineer] réglages repris de settings.json.bak");
+                s.LoadNotice = new Msg("Tes réglages étaient abîmés : la version précédente a été reprise." + where.FrText,
+                                       "Your settings file was damaged: the previous version was restored." + where.EnText);
+                return s;
+            }
+            return new EngineerSettings
+            {
+                SettingsVersion = CurrentVersion,
+                LoadNotice = new Msg("Tes réglages étaient illisibles : retour aux valeurs par défaut." + where.FrText,
+                                     "Your settings could not be read: back to the defaults." + where.EnText),
+            };
+        }
+
+        /// <summary>
+        /// settings.json absent mais un enregistrement interrompu entre les deux renommages de File.Replace : l'ancien
+        /// fichier est déjà devenu settings.json.bak, le nouveau est encore settings.json.tmp (écrit jusqu'au disque).
+        /// On reprend le plus récent qui se lit, null s'il n'y a rien (première installation).
+        /// </summary>
+        private static EngineerSettings Resume()
+        {
+            foreach (var path in new[] { TempPath, BackupPath })
+            {
+                if (!File.Exists(path)) continue;
+                var s = Read(path, out _);
+                if (s == null) continue;
+                try { File.Copy(path, FilePath, false); }
+                catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] remise en place de settings.json impossible : " + ex.Message); }
+                SimHub.Logging.Current.Warn("[AI Race Engineer] réglages repris de " + Path.GetFileName(path));
+                s.LoadNotice = new Msg("Ton dernier enregistrement a été interrompu : tes réglages ont été repris.",
+                                       "Your last save was interrupted: your settings were restored.");
+                return s;
+            }
+            return null;
+        }
+
+        private static EngineerSettings Read(string path, out string error)
+        {
+            for (int attempt = 1; ; attempt++)
+            {
+                try
                 {
-                    var s = JsonConvert.DeserializeObject<EngineerSettings>(File.ReadAllText(FilePath, Encoding.UTF8)) ?? new EngineerSettings();
+                    var s = JsonConvert.DeserializeObject<EngineerSettings>(File.ReadAllText(path, Encoding.UTF8));
+                    if (s == null) { error = "fichier vide"; return null; }
                     s.TransformSecrets(Unprotect);
                     s.Migrate();
+                    error = null;
                     return s;
                 }
+                // Fichier pris un instant (antivirus, sauvegarde) : on réessaie avant de le croire abîmé
+                catch (IOException) when (attempt < 3) { System.Threading.Thread.Sleep(200); }
+                catch (Exception ex) { error = ex.Message; return null; }
             }
-            catch (Exception ex)
-            {
-                SimHub.Logging.Current.Warn("[AI Race Engineer] réglages illisibles, valeurs par défaut : " + ex.Message);
-            }
-            return new EngineerSettings { SettingsVersion = 2 };
         }
+
+        private static readonly object SaveLock = new object(); // SimHub peut avoir deux instances du plugin
 
         public void Save()
         {
             var copy = JsonConvert.DeserializeObject<EngineerSettings>(JsonConvert.SerializeObject(this));
             copy.TransformSecrets(Protect);
-            Directory.CreateDirectory(DataDir);
-            File.WriteAllText(FilePath, JsonConvert.SerializeObject(copy, Formatting.Indented), Encoding.UTF8);
+            var json = JsonConvert.SerializeObject(copy, Formatting.Indented);
+            lock (SaveLock)
+            {
+                Directory.CreateDirectory(DataDir);
+                // Écriture sûre : un fichier temporaire écrit jusqu'au disque, puis échangé d'un coup avec settings.json
+                // (l'ancien devient settings.json.bak). Une coupure ne laisse jamais un fichier à moitié écrit.
+                var tmp = TempPath;
+                using (var stream = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None))
+                {
+                    using (var writer = new StreamWriter(stream, Encoding.UTF8, 4096, true)) writer.Write(json);
+                    stream.Flush(true);
+                }
+                if (File.Exists(FilePath)) File.Replace(tmp, FilePath, BackupPath, true);
+                else File.Move(tmp, FilePath);
+            }
         }
 
         private void Migrate()
@@ -225,7 +344,17 @@ namespace AIRaceEngineer
             if (Providers.TryGetValue("infomaniak", out var inf) && (inf.Model == "Ministral-3-14B" || inf.Model == "mistral3")) inf.Model = "mistralai/Ministral-3-14B-Instruct-2512";
             // 0.4.0 : la voix française de Kokoro comprend mal l'anglais de course, les voix neuronales deviennent la voix par défaut
             if (SettingsVersion < 2 && TtsEngine == "kokoro") TtsEngine = "neural";
-            SettingsVersion = 2;
+            // Microsoft a renommé la voix William (même voix)
+            if (NeuralVoiceEn == "en-AU-WilliamNeural") NeuralVoiceEn = "en-AU-WilliamMultilingualNeural";
+            // 0.5.0 : modèles retirés par leur fournisseur (gpt-4.1-nano et le Llama 8B « -fast » ne répondent plus) :
+            // on passe au modèle par défaut à chaque chargement. gpt-4.1-mini et gpt-4o-mini s'arrêtent le 14/01/2027 :
+            // remplacés une seule fois, à la mise à jour ; choisis de nouveau à la main, ils restent.
+            if (Providers.TryGetValue("openai", out var oai)
+                && (oai.Model == "gpt-4.1-nano" || (SettingsVersion < 3 && (oai.Model == "gpt-4.1-mini" || oai.Model == "gpt-4o-mini"))))
+                oai.Model = ProviderInfo.Get("openai").DefaultModel;
+            if (Providers.TryGetValue("cloudflare", out var cf) && cf.Model == "@cf/meta/llama-3.1-8b-instruct-fast")
+                cf.Model = ProviderInfo.Get("cloudflare").DefaultModel;
+            SettingsVersion = CurrentVersion;
         }
 
         private void TransformSecrets(Func<string, string> f)
@@ -254,6 +383,8 @@ namespace AIRaceEngineer
             var info = ProviderInfo.Get(Provider);
             var p = Current();
             bool configured = AiConfigured;
+            var model = ModelOrDefault();
+            var req = info.RequestFor(model);
             return new
             {
                 rev,
@@ -264,9 +395,11 @@ namespace AIRaceEngineer
                     configured,
                     base_url = info.BaseUrl(p),
                     api_key = string.IsNullOrWhiteSpace(p.ApiKey) ? "none" : p.ApiKey.Trim(),
-                    model = ModelOrDefault(),
-                    max_tokens = 120,
-                    temperature = 0.3,
+                    model,
+                    max_tokens = req.MaxTokens,
+                    max_tokens_field = req.MaxTokensField,     // nom du paramètre : max_tokens ou max_completion_tokens
+                    temperature = req.Temperature,             // null : ne pas l'envoyer
+                    reasoning_effort = req.ReasoningEffort,    // null : ne pas l'envoyer
                 },
                 tts = new
                 {

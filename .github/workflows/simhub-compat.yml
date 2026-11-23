@@ -20,6 +20,7 @@ jobs:
     runs-on: windows-latest
     outputs:
       simhub: ${{ steps.simhub.outputs.version }}
+      prepared: ${{ steps.simhub.outcome }}
       tag: ${{ steps.published.outputs.tag }}
       published: ${{ steps.published.outcome }}
       source: ${{ steps.source.outcome }}
@@ -48,6 +49,16 @@ jobs:
         with:
           version: ${{ inputs.simhub_version }}
 
+      # NuGet restore and CompatCheck build, outside the checks: a network or NuGet outage fails the run here
+      # instead of being reported as "SimHub breaks the plugin"
+      - name: Prepare the tools
+        shell: pwsh
+        run: |
+          dotnet build tools/CompatCheck -c Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet restore plugin/AIRaceEngineer.csproj "-p:SimHubDir=$PWD/simhub-ref"
+          exit $LASTEXITCODE
+
       - name: Published plugin still loads
         id: published
         continue-on-error: true
@@ -55,7 +66,7 @@ jobs:
         run: |
           "tag=${{ steps.release.outputs.tag }}" >> $env:GITHUB_OUTPUT
           New-Item -ItemType Directory -Force report | Out-Null
-          dotnet run --project tools/CompatCheck -c Release -- published/AIRaceEngineer.dll simhub-ref *>&1 | Tee-Object report/published.txt
+          dotnet run --project tools/CompatCheck -c Release --no-build -- published/AIRaceEngineer.dll simhub-ref *>&1 | Tee-Object report/published.txt
           exit $LASTEXITCODE
 
       - name: Source still compiles
@@ -64,7 +75,7 @@ jobs:
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force report | Out-Null
-          dotnet build plugin/AIRaceEngineer.csproj -c Release "-p:SimHubDir=$PWD/simhub-ref" *>&1 | Tee-Object report/source.txt
+          dotnet build plugin/AIRaceEngineer.csproj -c Release --no-restore "-p:SimHubDir=$PWD/simhub-ref" *>&1 | Tee-Object report/source.txt
           exit $LASTEXITCODE
 
       - uses: actions/upload-artifact@v7
@@ -75,12 +86,16 @@ jobs:
 
   report:
     needs: check
-    if: needs.check.outputs.published == 'failure' || needs.check.outputs.source == 'failure'
+    # also when SimHub itself could not be prepared (e.g. a DLL the plugin needs is gone), not for other failures
+    if: >-
+      always() && needs.check.result != 'cancelled' &&
+      (needs.check.outputs.prepared == 'failure' || needs.check.outputs.published == 'failure' || needs.check.outputs.source == 'failure')
     runs-on: ubuntu-latest
     permissions:
       issues: write
     steps:
       - uses: actions/download-artifact@v8
+        if: needs.check.outputs.published == 'failure' || needs.check.outputs.source == 'failure'
         with:
           name: report
           path: report
@@ -98,6 +113,10 @@ jobs:
           $run = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
           $fence = '```'
           $body = "SimHub **$env:SIMHUB** ([release](https://github.com/SHWotever/SimHub/releases/tag/$env:SIMHUB)), checked by [this run]($run).`n`n"
+          if ($env:PUBLISHED -ne "failure" -and $env:SOURCE -ne "failure") {
+            $title = "SimHub $env:SIMHUB`: the compatibility check could not run"
+            $body += "SimHub could not be downloaded or installed, or a DLL the plugin needs is missing from it, so the plugin could not be checked. The run's log has the details.`n"
+          }
           if ($env:PUBLISHED -eq "failure") {
             $body += "### The published plugin ($env:TAG) does not load`n`n$fence`n" + ((Get-Content report/published.txt -ErrorAction SilentlyContinue) -join "`n") + "`n$fence`n`n"
           }

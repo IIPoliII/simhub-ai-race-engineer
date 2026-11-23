@@ -46,7 +46,10 @@ def beep(freq=1200.0, duration=0.06, rate=24000, volume=0.15):
     """Petit 'clic' radio quand on appuie / relâche le bouton."""
     t = np.arange(int(rate * duration)) / rate
     tone = np.sin(2 * np.pi * freq * t) * np.hanning(len(t)) * volume
-    sd.play(tone.astype(np.float32), rate)
+    try:
+        sd.play(tone.astype(np.float32), rate)
+    except Exception:  # pas de sortie son (casque débranché...) : sans clic, mais le client continue
+        pass
 
 
 # Niveau d'une F1 qui passe à 12 m du micro, par rapport à la voix (crête à 1)

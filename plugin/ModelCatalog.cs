@@ -101,8 +101,8 @@ namespace AIRaceEngineer
         {
             var set = new HashSet<string>(fetched.Where(m => !string.IsNullOrWhiteSpace(m)), StringComparer.Ordinal);
             if (set.Count == 0) return new string[0];
-            // Les conseillés d'abord
-            var head = info.Models.ToList();
+            // Les conseillés d'abord ; chez OpenAI (liste complète pour la clé), seulement ceux encore servis : un modèle retiré disparaît
+            var head = info.Models.Where(m => info.Id != "openai" || set.Contains(m)).ToList();
             return head.Concat(set.Where(m => !head.Contains(m)).OrderBy(m => m, StringComparer.OrdinalIgnoreCase)).ToArray();
         }
     }

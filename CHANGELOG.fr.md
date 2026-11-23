@@ -5,6 +5,95 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.5.0] - 2026-11-23
+
+### Ajouté
+- La page du plugin, la fenêtre de bienvenue et les guides ? en français et en anglais. Ils suivent le réglage Langue,
+  comme les messages du client vocal : changer de langue redessine la page.
+- `AIRaceEngineer-Setup.exe` demande la langue de l'installation, français ou anglais (celle de ton installation
+  actuelle est présélectionnée, sinon celle de ton Windows), puis installe. Avec `/passive` ou `/quiet`, il installe
+  sans rien demander.
+- Un seul `AIRaceEngineer-Setup.msi` avec les deux langues, pour le déploiement silencieux (`ProductLanguage=1036`
+  pour le français, `1033` pour l'anglais). Il remplace les MSI français et anglais séparés, et la mise à jour marche
+  quelle que soit la langue installée avant.
+- L'installation en une ligne parle français ou anglais, selon Windows.
+- GitHub Actions construit et publie chaque release, et vérifie chaque jour que le plugin se charge encore dans
+  la dernière version de SimHub.
+- Les lecteurs d'écran lisent le nom de chaque interrupteur et de chaque champ de la page du plugin.
+
+### Modifié
+- La page du plugin suit maintenant la langue de l'ingé (Langue et voix). Les réglages de la 0.4.x gardent leur
+  langue ; la langue choisie dans Setup.exe vaut pour les nouvelles installations.
+- OpenAI : le modèle conseillé est maintenant gpt-6-luna, et la mise à jour te le met si tu utilisais gpt-4.1-nano
+  (retiré), gpt-4.1-mini ou gpt-4o-mini (retirés tous les deux le 14 janvier 2027). Tu peux reprendre ces deux-là
+  dans la liste « Modèle » jusque-là.
+- IA sur ton PC (Ollama) : le guide conseille maintenant qwen3:4b-instruct ; qwen3:4b télécharge désormais un modèle
+  qui réfléchit, trop lent pour la radio. gemma3:4b remplace mistral-small3.2 parmi les modèles conseillés.
+- Cloudflare : Gemma 4 26B remplace Llama 3.1 8B parmi les modèles conseillés. Llama 3.1 8B n'est plus proposé :
+  si tu l'utilisais, la mise à jour te met Llama 3.3 70B.
+- Le client vocal installe exactement les versions de dépendances testées pour la release.
+- Plus léger pour la machine : la page arrête de se rafraîchir quand SimHub est réduit et ralentit quand SimHub est
+  en arrière-plan, et les champs de texte sont enregistrés quand tu t'arrêtes de taper.
+- Première mise en route : la case « Client vocal » affiche « Installation 1/2 », puis « 2/2 », avec l'étape
+  en cours et la taille des téléchargements de la reconnaissance vocale (le texte complet au survol). Si la voix hors
+  ligne ne peut pas marcher sur le PC, la case le dit une fois la mise en route finie.
+- Le bouton « Nouveautés » du bandeau de mise à jour devient « Notes de version » et ouvre ces notes dans ta langue.
+- Réparation : relance `AIRaceEngineer-Setup.exe` et choisis « Réparer » (Programmes et fonctionnalités ne la
+  propose plus).
+- L'installateur en français te tutoie sur tous les écrans, et sa page de licence commence par une note en français.
+- Infomaniak : « Obtenir une clé » ouvre la page des tokens API utilisée dans le guide.
+
+### Corrigé
+- Claude : les questions n'échouent plus avec l'erreur 400, et « Tester la connexion » envoie maintenant la même
+  requête que l'ingé (pas de temperature, de la marge pour la réflexion).
+- Un modèle retiré ou inconnu n'est plus pris pour un mauvais Account ID ou Product ID : « Tester la connexion »
+  affiche le message du fournisseur et propose les modèles conseillés.
+- Les réglages sont enregistrés de façon sûre : une coupure pendant un enregistrement ne les perd plus
+  (settings.json.bak), et un fichier illisible est gardé en settings.json.bad au lieu d'être remplacé par les valeurs
+  par défaut. La page te prévient quand ça arrive.
+- La voix hors ligne marche avec un nom de profil Windows accentué, et utilise au plus la moitié des cœurs,
+  comme la reconnaissance vocale.
+- ElevenLabs : si la clé, le quota ou le Voice ID est refusé, la voix hors ligne prend le relais au lieu de se taire.
+  Un Voice ID vide donne la voix par défaut.
+- Quand la voix en ligne tombe, la voix hors ligne parle tout de suite pendant une minute au lieu de réessayer avant
+  chaque phrase, et les annonces trop anciennes sont abandonnées au lieu d'arriver en retard.
+- Une réponse vide de l'IA (un modèle qui réfléchit avant de parler) ne passe plus pour une panne de voix :
+  l'ingé te le dit, et la page donne le nom du modèle.
+- La case « Client vocal » garde les erreurs et les avertissements au lieu d'afficher « Prêt à répondre » (un souci
+  de micro compris), et « Radio check » et « Écouter » restent bloqués pendant que l'ingé répond.
+- Le client vocal ne plante plus sans sortie audio, et un proxy Windows ne le coupe plus de SimHub.
+- La reconnaissance vocale se prépare vraiment au démarrage, donc la première question n'est pas plus lente que
+  les suivantes, et changer de langue ne la recharge plus.
+- Multiclasse : ta position, l'écart au leader et les voitures devant et derrière sont maintenant tous ceux de ta
+  classe (ils étaient mélangés avec le classement général) ; l'ingé connaît aussi ta place au général.
+- Meilleur tour : les tours invalidés ne comptent plus, et démarrer SimHub en pleine session ne donne plus un faux
+  meilleur tour.
+- Carburant : l'alerte ne dit plus un tour de moins que le réglage et revient après chaque ravitaillement ;
+  la consommation moyenne laisse de côté les tours aux stands et les tours incomplets ; l'ingé utilise l'unité
+  de carburant de SimHub (litres ou gallons).
+- Quand le jeu ne fournit pas la cartographie moteur, la répartition de freinage, la taille du réservoir, la position
+  ou les températures de l'air et de la piste, l'ingé dit qu'il ne sait pas au lieu d'annoncer 0. Le leader n'est
+  plus donné comme la voiture derrière quand ta position est inconnue.
+- Changer de jeu dans SimHub ne redémarre plus le client vocal, n'interrompt plus sa première mise en route et
+  ne vide plus son journal. Une mise à jour déjà préparée n'est plus perdue, et la proposition de redémarrer
+  n'apparaît qu'une fois.
+- Un client vocal resté après un plantage de SimHub s'arrête au lieu de répondre en double avec le nouveau.
+- La première mise en route ne bloque plus sur certains PATH ou quand uv s'installe dans un dossier inhabituel,
+  ne redémarre plus en boucle, et son message d'erreur dit quoi faire.
+- La page du plugin ne se fige plus pendant le démarrage du client vocal, et la case « Client vocal » dit quand
+  le port 8889 est occupé au lieu de promettre un démarrage automatique.
+- Mises à jour : une copie ratée ne laisse plus SimHub sans plugin ; le bandeau dit « prête » pour une mise à jour
+  qui s'installe au redémarrage et n'affiche plus « Installation » après une recherche ; relancer
+  `AIRaceEngineer-Setup.exe` sur une version mise à jour depuis le plugin remplace tous les fichiers du client vocal.
+  Un nom d'utilisateur Windows avec une apostrophe ne casse plus les mises à jour ni l'installation en une ligne.
+- Liste « Modèle » : la rafraîchir n'écrase plus le modèle que tu tapes. Le résultat de « Tester la connexion »
+  disparaît quand tu changes la clé, le compte ou le modèle.
+- La fenêtre de bienvenue ne revient plus au démarrage suivant, et un guide ou la fenêtre de bienvenue ne s'ouvre
+  plus en double.
+- L'installateur ne promet plus de relancer SimHub quand tu répares ou désinstalles, et « Lancer SimHub » sur sa
+  dernière page n'affiche plus de carré gris.
+- Microsoft a renommé la voix William : ton choix est gardé.
+
 ## [0.4.8] - 2026-11-23
 
 ### Ajouté
@@ -103,6 +192,7 @@ Tous les changements notables du projet sont notés ici. Le format suit
 - Première version : plugin SimHub avec télémétrie JSON, client vocal Python (Whisper local, IA, voix), push-to-talk.
 - Installateur en une ligne et mises à jour depuis SimHub.
 
+[0.5.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.8...v0.5.0
 [0.4.8]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.7...v0.4.8
 [0.4.7]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.6...v0.4.7
 [0.4.6]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.4.5...v0.4.6

@@ -6,7 +6,9 @@
     <RootNamespace>AIRaceEngineer</RootNamespace>
     <LangVersion>latest</LangVersion>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <Version>0.4.8</Version>
+    <Version>0.5.0</Version>
+    <Company>IIPoliII</Company>
+    <Product>AI Race Engineer for SimHub</Product>
     <!-- Dossier d'installation de SimHub (surchargeable : dotnet build -p:SimHubDir="D:\SimHub") -->
     <SimHubDir Condition="'$(SimHubDir)' == '' And '$(SIMHUB_INSTALL_PATH)' != ''">$(SIMHUB_INSTALL_PATH)</SimHubDir>
     <SimHubDir Condition="'$(SimHubDir)' == ''">C:\Program Files (x86)\SimHub</SimHubDir>
@@ -28,7 +30,7 @@
     <Reference Include="System.IO.Compression.FileSystem" />
   </ItemGroup>
 
-  <!-- DLL fournies par SimHub : rÃ©fÃ©rencÃ©es mais jamais copiÃ©es ni commitÃ©es -->
+  <!-- DLL fournies par SimHub : référencées mais jamais copiées ni commitées -->
   <ItemGroup>
     <Reference Include="GameReaderCommon">
       <HintPath>$(SimHubDir)\GameReaderCommon.dll</HintPath>

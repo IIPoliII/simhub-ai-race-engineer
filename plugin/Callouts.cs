@@ -20,11 +20,11 @@ namespace AIRaceEngineer
 
         private TimeSpan _prevLap, _sessionBest;
         private DateTime? _pendingLap;
-        private bool _pitThisLap, _pendingLapWasPit;
+        private bool _pitThisLap, _pendingLapWasPit, _pendingLapValid;
         private int _announcedPos, _candidatePos;
         private DateTime _candidateSince;
         private int _fuelLevelAnnounced = int.MaxValue;
-        private double _lastFuel;
+        private double _minFuel = double.MaxValue;   // plus bas niveau depuis le dernier ravitaillement
 
         public Callouts(Func<EngineerSettings> settings, Action<string> say)
         {
@@ -32,19 +32,24 @@ namespace AIRaceEngineer
             _say = say;
         }
 
-        public void Reset()
+        /// <param name="knownBest">meilleur tour déjà fait dans la session (plugin lancé en cours de route), sinon zéro</param>
+        public void Reset(TimeSpan knownBest)
         {
-            _prevLap = _sessionBest = TimeSpan.Zero;
+            _prevLap = TimeSpan.Zero;
+            _sessionBest = knownBest > TimeSpan.Zero ? knownBest : TimeSpan.Zero;
             _pendingLap = null;
             _pitThisLap = false;
             _announcedPos = _candidatePos = 0;
             _fuelLevelAnnounced = int.MaxValue;
+            _minFuel = double.MaxValue;
         }
 
-        public void OnLapCompleted()
+        /// <param name="valid">tour resté valide jusqu'à la ligne (suivi à chaque image par le plugin)</param>
+        public void OnLapCompleted(bool valid)
         {
             _pendingLap = DateTime.UtcNow + LapDelay;
             _pendingLapWasPit = _pitThisLap;
+            _pendingLapValid = valid;
             _pitThisLap = false;
         }
 
@@ -68,7 +73,8 @@ namespace AIRaceEngineer
                 else
                 {
                     var parts = new List<string>();
-                    bool pb = _sessionBest > TimeSpan.Zero && lap < _sessionBest;
+                    // Tour invalidé (coupé, hors limites) : jamais « meilleur tour », et il ne devient pas la référence
+                    bool pb = _pendingLapValid && _sessionBest > TimeSpan.Zero && lap < _sessionBest;
                     if (s.CallPersonalBest && pb) parts.Add(fr ? "Meilleur tour !" : "Personal best!");
                     if (s.CallLapTime)
                     {
@@ -89,7 +95,7 @@ namespace AIRaceEngineer
                     }
                     if (parts.Count > 0) _say(string.Join(" ", parts));
 
-                    if (_sessionBest == TimeSpan.Zero || lap < _sessionBest) _sessionBest = lap;
+                    if (_pendingLapValid && (_sessionBest == TimeSpan.Zero || lap < _sessionBest)) _sessionBest = lap;
                     _prevLap = lap;
                 }
             }
@@ -109,18 +115,22 @@ namespace AIRaceEngineer
             }
 
             // --- Carburant ---
-            if (d.Fuel > _lastFuel + 1) _fuelLevelAnnounced = int.MaxValue; // ravitaillement
-            _lastFuel = d.Fuel;
+            // Ravitaillement, même progressif (quelques dixièmes de litre par appel) : comparé au plus bas niveau vu
+            if (d.Fuel < _minFuel) _minFuel = d.Fuel;
+            else if (d.Fuel > _minFuel + 0.5) { _fuelLevelAnnounced = int.MaxValue; _minFuel = d.Fuel; }
             if (s.CallFuel && d.IsInPitLane == 0 && d.EstimatedFuelRemaingLaps is double laps && laps > 0)
             {
                 int threshold = Math.Max(1, s.FuelWarningLaps);
                 int level = laps <= 1.2 ? 1 : laps <= threshold ? threshold : int.MaxValue;
                 if (level < _fuelLevelAnnounced)
                 {
-                    int n = (int)Math.Floor(laps);
+                    // Arrondi : 2,98 tours au seuil de 3 se dit « environ 3 tours », comme le réglage
+                    int n = (int)Math.Round(laps, MidpointRounding.AwayFromZero);
                     _say(level == 1
                         ? (fr ? "Attention carburant, il reste environ un tour." : "Fuel critical, about one lap left.")
-                        : (fr ? $"Carburant : environ {n} tours restants." : $"Fuel: about {n} laps left."));
+                        : n == 1
+                            ? (fr ? "Carburant : environ un tour restant." : "Fuel: about one lap left.")
+                            : (fr ? $"Carburant : environ {n} tours restants." : $"Fuel: about {n} laps left."));
                     _fuelLevelAnnounced = level;
                 }
             }

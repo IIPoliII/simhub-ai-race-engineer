@@ -28,7 +28,7 @@ namespace AIRaceEngineer
 
             Msg missing = null;
             if (info.NeedsKey && string.IsNullOrWhiteSpace(p.ApiKey)) missing = new Msg("Colle d'abord ta clé API.", "Paste your API key first.");
-            else if (info.AccountLabel != null && string.IsNullOrWhiteSpace(p.AccountId)) missing = new Msg($"Renseigne d'abord le {info.AccountLabel}.", $"Fill in the {info.AccountLabel} first.");
+            else if (info.AccountLabel != null && string.IsNullOrWhiteSpace(p.AccountId)) missing = new Msg($"Renseigne d'abord le champ {info.AccountLabel}.", $"Fill in the {info.AccountLabel} first.");
             if (missing != null) { Publish(false, missing, null); return; }
 
             Busy = true;
@@ -54,12 +54,17 @@ namespace AIRaceEngineer
         private void Test(ProviderInfo info, string baseUrl, string apiKey, string model)
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-            var body = JsonConvert.SerializeObject(new
+            // Même requête que le client vocal (marge, temperature, raisonnement) : un test réussi veut dire que les questions passeront
+            var req = info.RequestFor(model);
+            var request = new JObject
             {
-                model,
-                messages = new[] { new { role = "user", content = "Réponds seulement : OK" } },
-                max_tokens = 10,
-            });
+                ["model"] = model,
+                ["messages"] = new JArray(new JObject { ["role"] = "user", ["content"] = "Réponds seulement : OK" }),
+                [req.MaxTokensField] = req.MaxTokens,
+            };
+            if (req.Temperature != null) request["temperature"] = req.Temperature.Value;
+            if (req.ReasoningEffort != null) request["reasoning_effort"] = req.ReasoningEffort;
+            var body = request.ToString(Formatting.None);
             var started = DateTime.UtcNow;
             using (var wc = new WebClient { Encoding = Encoding.UTF8 })
             {
@@ -71,8 +76,14 @@ namespace AIRaceEngineer
                     var ms = (int)(DateTime.UtcNow - started).TotalMilliseconds;
                     var answer = ((string)JObject.Parse(json).SelectToken("choices[0].message.content") ?? "").Trim();
                     if (answer.Length == 0)
-                        Publish(false, new Msg($"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler, trop lent pour la radio. Choisis-en un plus direct.",
-                                               $"{model} answers, but its reply is empty: it is a model that thinks before speaking, too slow for the radio. Pick a more direct one."), null);
+                    {
+                        // Sur un PC (Ollama), on nomme les petits modèles qui répondent sans réfléchir
+                        bool local = info.Id == "custom";
+                        string fr = local ? $" : {info.Models[0]} ou {info.Models[1]} (ollama pull {info.Models[0]})." : ".";
+                        string en = local ? $": {info.Models[0]} or {info.Models[1]} (ollama pull {info.Models[0]})." : ".";
+                        Publish(false, new Msg($"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler, trop lent pour la radio. Choisis-en un plus direct" + fr,
+                                               $"{model} answers, but its reply is empty: it is a model that thinks before speaking, too slow for the radio. Pick a more direct one" + en), null);
+                    }
                     else
                         Publish(true, new Msg($"Connexion OK · {model} · réponse en {ms} ms" + (answer.Length < 40 ? $" : « {answer} »" : ""),
                                               $"Connection OK · {model} · answered in {ms} ms" + (answer.Length < 40 ? $": “{answer}”" : "")), null);
@@ -89,8 +100,18 @@ namespace AIRaceEngineer
                     else if (code == 401 || code == 403)
                         Publish(false, new Msg($"Clé API refusée ({code}). Vérifie la clé" + (info.Id == "infomaniak" ? " et qu'elle a le scope « ai-tools »." : "."),
                                                $"API key rejected ({code}). Check the key" + (info.Id == "infomaniak" ? " and that it has the ai-tools scope." : ".")), null);
+                    else if (code == 404 && ModelError(detail) is string why)
+                    {
+                        // Modèle retiré ou pas installé : l'adresse est bonne, on le dit avec le message du fournisseur
+                        var others = Recommended(info, model);
+                        bool pick = others != null && others.Length > 0;
+                        bool local = info.Id == "custom";
+                        Publish(false, new Msg($"Le modèle « {model} » " + (local ? "est introuvable sur ce serveur" : $"n'est pas disponible chez {info.Name.FrText}") + $" : {Sentence(Short(why))}" + (pick ? " Essaie un modèle conseillé :" : ""),
+                                               $"The model “{model}” " + (local ? "was not found on this server" : $"is not available at {info.Name.EnText}") + $": {Sentence(Short(why))}" + (pick ? " Try a recommended model:" : "")),
+                                others);
+                    }
                     else if (code == 404)
-                        Publish(false, new Msg("Adresse introuvable (404)" + (info.AccountLabel != null ? $" : vérifie le {info.AccountLabel}." : "."),
+                        Publish(false, new Msg("Adresse introuvable (404)" + (info.AccountLabel != null ? $" : vérifie le champ {info.AccountLabel}." : "."),
                                                "Address not found (404)" + (info.AccountLabel != null ? $": check the {info.AccountLabel}." : ".")), null);
                     else if (code == 429)
                         Publish(false, new Msg("Quota dépassé (429). Réessaie plus tard ou change de fournisseur.", "Quota exceeded (429). Try again later or switch provider."), null);
@@ -138,6 +159,27 @@ namespace AIRaceEngineer
             catch { }
             return body;
         }
+
+        /// <summary>Message d'une erreur qui parle du modèle (OpenAI : model_not_found ; Claude, Ollama : « model ... »), sinon null.</summary>
+        private static string ModelError(string body)
+        {
+            try
+            {
+                var t = JToken.Parse(body);
+                var msg = (string)t.SelectTokens("$..message").FirstOrDefault(x => x.Type == JTokenType.String);
+                var code = (string)t.SelectTokens("$..code").FirstOrDefault(x => x.Type == JTokenType.String);
+                if (code == "model_not_found" || (msg != null && msg.IndexOf("model", StringComparison.OrdinalIgnoreCase) >= 0))
+                    return string.IsNullOrWhiteSpace(msg) ? code : msg.Trim();
+            }
+            catch { }
+            return null;
+        }
+
+        /// <summary>Modèles conseillés à proposer d'un clic (pas pour une IA sur le PC : il faut d'abord les télécharger).</summary>
+        private static string[] Recommended(ProviderInfo info, string model) =>
+            info.Id == "custom" ? null : info.Models.Where(m => m != model).ToArray();
+
+        private static string Sentence(string s) => s.EndsWith(".") ? s : s + ".";
 
         private static string Short(string s) => s.Length > 220 ? s.Substring(0, 220) + "..." : s;
     }

@@ -75,13 +75,27 @@ namespace AIRaceEngineer
         }
 
         /// <summary>
+        /// Chaîne PowerShell entre apostrophes. PowerShell prend aussi ‘ ’ ‚ ‛ pour des apostrophes : on les double
+        /// toutes, sinon un chemin comme C:\Users\D’Amour casse le script.
+        /// </summary>
+        private static string Q(string v)
+        {
+            var sb = new StringBuilder(v.Length + 2).Append('\'');
+            foreach (var c in v)
+            {
+                sb.Append(c);
+                if (c == '\'' || (c >= '\u2018' && c <= '\u201B')) sb.Append(c);
+            }
+            return sb.Append('\'').ToString();
+        }
+
+        /// <summary>
         /// Script PowerShell, sans admin : attend la fermeture de SimHub, vérifie que la DLL préparée est bien celle
         /// téléchargée et contrôlée (même empreinte), la recopie par-dessus l'ancienne (gardée en mémoire pour la remettre
         /// si la copie échoue), puis relance SimHub si demandé. Sans DLL préparée dans cette session, il ne copie rien.
         /// </summary>
         public static string ExitScript(int pid, string simhubExe, bool restart)
         {
-            string Q(string v) => "'" + v.Replace("'", "''") + "'";
             var target = typeof(Updater).Assembly.Location;
             return
                 $"$p = Get-Process -Id {pid} -ErrorAction SilentlyContinue; if ($p) {{ $p.WaitForExit(120000) | Out-Null }}; " +
@@ -174,7 +188,11 @@ namespace AIRaceEngineer
             // Vérifie que c'est bien notre plugin, dans la version annoncée
             var name = AssemblyName.GetAssemblyName(downloaded);
             if (name.Name != "AIRaceEngineer" || Trim(name.Version) != Latest)
-                throw new InvalidOperationException(L10n.T($"fichier téléchargé inattendu ({name.Name} {name.Version}).", $"unexpected downloaded file ({name.Name} {name.Version})."));
+            {
+                Failed = true;
+                _state = new Msg($"Erreur : fichier téléchargé inattendu ({name.Name} {name.Version}).", $"Error: unexpected downloaded file ({name.Name} {name.Version}).");
+                return;
+            }
 
             var target = typeof(Updater).Assembly.Location;
 
@@ -194,13 +212,17 @@ namespace AIRaceEngineer
 
             _state = new Msg("Installation : accepte la demande d'autorisation Windows...", "Installing: accept the Windows permission prompt...");
 
-            string Q(string s) => "'" + s.Replace("'", "''") + "'";
+            // Copie d'abord à côté (disque plein, fichier disparu : la DLL en place ne bouge pas), puis échange par
+            // renommages ; si le dernier échoue, l'ancienne DLL est remise
             var script =
                 "$ErrorActionPreference = 'Stop'; " +
-                $"$t = {Q(target)}; " +
+                $"$t = {Q(target)}; $n = \"$t.new\"; " +
+                "try { " +
+                $"Copy-Item {Q(downloaded)} $n -Force; " +
                 "Remove-Item \"$t.old\" -Force -ErrorAction SilentlyContinue; " +
                 "Move-Item $t \"$t.old\" -Force; " +
-                $"Copy-Item {Q(downloaded)} $t -Force";
+                "try { Move-Item $n $t -Force } catch { Move-Item \"$t.old\" $t -Force; throw } " +
+                "} catch { Remove-Item $n -Force -ErrorAction SilentlyContinue; throw }";
             var encoded = Convert.ToBase64String(Encoding.Unicode.GetBytes(script));
 
             var psi = new ProcessStartInfo("powershell.exe", "-NoProfile -NonInteractive -EncodedCommand " + encoded)
@@ -216,7 +238,11 @@ namespace AIRaceEngineer
 
             process.WaitForExit();
             if (process.ExitCode != 0 || Trim(AssemblyName.GetAssemblyName(target).Version) != Latest)
-                throw new InvalidOperationException(L10n.T("la copie a échoué. Ferme SimHub et relance l'installateur.", "the copy failed. Close SimHub and run the installer again."));
+            {
+                Failed = true;
+                _state = new Msg("Erreur : la copie a échoué. Ferme SimHub et relance l'installateur.", "Error: the copy failed. Close SimHub and run the installer again.");
+                return;
+            }
 
             UpdateClient(client, clientZip);
             _stagedFailed = false;
@@ -247,6 +273,9 @@ namespace AIRaceEngineer
                     if (string.IsNullOrEmpty(entry.Name)) { Directory.CreateDirectory(dest); continue; }
                     Directory.CreateDirectory(Path.GetDirectoryName(dest));
                     System.IO.Compression.ZipFileExtensions.ExtractToFile(entry, dest, true);
+                    // ExtractToFile garde l'ancienne date de création : dates égales, sinon un MSI suivant croit
+                    // le fichier modifié par l'utilisateur et ne le remplace pas
+                    File.SetCreationTimeUtc(dest, File.GetLastWriteTimeUtc(dest));
                 }
             }
         }

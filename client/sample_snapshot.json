@@ -2,20 +2,22 @@
   "game_running": true,
   "game": "AssettoCorsaCompetizione",
   "session": {
-    "type": "Race",
+    "type": "RACE",
     "track": "spa",
     "car": "Porsche 992 GT3 R",
     "car_class": "GT3",
-    "time_left": "0:38:12.000",
+    "multiclass": false,
+    "time_left": "38:12.000",
     "total_laps": null,
     "remaining_laps": null,
     "air_temp": 22.0,
     "track_temp": 31.5,
-    "temp_unit": "C",
+    "temp_unit": "Celcius",
     "flag": null
   },
   "me": {
     "position": 6,
+    "overall_position": null,
     "field_size": 24,
     "lap": 9,
     "current_lap_time": "1:02.415",
@@ -32,12 +34,12 @@
   "fuel": {
     "level": 54.3,
     "capacity": 120.0,
-    "unit": "L",
+    "unit": "Liters",
     "estimated_laps_left": 13.4
   },
   "tyres": {
     "compound": "Dry",
-    "pressure_unit": "PSI",
+    "pressure_unit": "Psi",
     "pressure": { "fl": 27.6, "fr": 27.9, "rl": 27.3, "rr": 27.5 },
     "temperature": { "fl": 84, "fr": 89, "rl": 81, "rr": 83 },
     "wear_pct": null,
@@ -73,8 +75,8 @@
     "pit_stops": 0
   },
   "recent_laps": [
-    { "lap": 6, "time": "2:18.640", "fuel_used": 4.05 },
-    { "lap": 7, "time": "2:18.311", "fuel_used": 4.02 },
-    { "lap": 8, "time": "2:18.904", "fuel_used": 4.08 }
+    { "lap": 6, "time": "2:18.640", "fuel_used": 4.05, "pit": false },
+    { "lap": 7, "time": "2:18.311", "fuel_used": 4.02, "pit": false },
+    { "lap": 8, "time": "2:18.904", "fuel_used": 4.08, "pit": false }
   ]
 }

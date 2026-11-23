@@ -109,7 +109,22 @@ namespace AIRaceEngineer
 
     public class EngineerSettings
     {
-        public string Language { get; set; } = CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "fr" ? "fr" : "en";
+        public string Language { get; set; } = DefaultLanguage();
+
+        /// <summary>
+        /// Langue de départ : celle choisie dans l'installateur (HKCU\Software\AIRaceEngineer, valeur Language),
+        /// sinon celle de Windows.
+        /// </summary>
+        public static string DefaultLanguage()
+        {
+            try
+            {
+                using (var key = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\AIRaceEngineer"))
+                    if (key?.GetValue("Language") is string chosen && (chosen == "fr" || chosen == "en")) return chosen;
+            }
+            catch { }
+            return CultureInfo.CurrentUICulture.TwoLetterISOLanguageName == "fr" ? "fr" : "en";
+        }
 
         // IA
         public string Provider { get; set; } = "infomaniak";

@@ -1,5 +1,7 @@
 name: SimHub DLLs
-description: Installs a SimHub release on the runner (once per version, then cached) and puts its DLLs in simhub-ref/.
+description: >
+  Installs a SimHub release on the runner (once per version, then cached under the key simhub-dlls-<version>)
+  and puts its DLLs in simhub-ref/. Use it only in a job with read-only permissions: it runs SimHub's installer.
 inputs:
   version:
     description: SimHub version (a release tag of SHWotever/SimHub). Empty = the latest.
@@ -18,15 +20,28 @@ runs:
         WANTED: ${{ inputs.version }}
       run: |
         $v = if ($env:WANTED) { $env:WANTED } else { gh release view -R SHWotever/SimHub --json tagName -q .tagName }
-        if (-not $v) { throw "Could not find SimHub's latest version." }
+        if ($v -notmatch '^[0-9][0-9A-Za-z.\-]*$') { throw "Unexpected SimHub version: '$v'" }
         "version=$v" >> $env:GITHUB_OUTPUT
+
     - id: cache
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: simhub-ref
         key: simhub-dlls-${{ steps.version.outputs.version }}
+
+    # Download only (gh needs the token); the installer itself runs in the next step, without it
     - if: steps.cache.outputs.cache-hit != 'true'
       shell: pwsh
       env:
         GH_TOKEN: ${{ github.token }}
-      run: '& "${{ github.action_path }}/get-simhub.ps1" -Version "${{ steps.version.outputs.version }}" -Out simhub-ref'
+        VERSION: ${{ steps.version.outputs.version }}
+      run: |
+        $dir = Join-Path $env:RUNNER_TEMP "simhub-download"
+        gh release download $env:VERSION -R SHWotever/SimHub -p "*.zip" -D $dir --clobber
+        if ($LASTEXITCODE -ne 0) { throw "Could not download SimHub $env:VERSION." }
+
+    - if: steps.cache.outputs.cache-hit != 'true'
+      shell: pwsh
+      env:
+        VERSION: ${{ steps.version.outputs.version }}
+      run: '& "$env:GITHUB_ACTION_PATH/get-simhub.ps1" -Version $env:VERSION -Download (Join-Path $env:RUNNER_TEMP "simhub-download") -Out simhub-ref'

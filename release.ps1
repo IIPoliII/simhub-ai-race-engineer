@@ -3,8 +3,10 @@
 #   1. monte <Version> dans plugin/AIRaceEngineer.csproj et écris ses notes dans CHANGELOG.md et CHANGELOG.fr.md
 #   2. commit + push, puis : git tag vX.Y.Z ; git push origin vX.Y.Z   → Actions construit et publie la release.
 # En local : .\release.ps1 -BuildOnly construit tout dans plugin\bin\Release sans rien publier.
+# -PublishOnly publie les fichiers déjà construits dans plugin\bin\Release (le job « publish » de GitHub Actions).
 param(
     [switch]$BuildOnly,
+    [switch]$PublishOnly,
     [string]$SimHubDir   # dossier des DLL de SimHub (par défaut : l'installation de SimHub)
 )
 $ErrorActionPreference = "Stop"
@@ -18,18 +20,25 @@ if ($env:GITHUB_REF_TYPE -eq "tag" -and $env:GITHUB_REF_NAME -ne "v$version") {
     throw "Le tag $env:GITHUB_REF_NAME ne correspond pas à la version du csproj ($version)."
 }
 
+if ($BuildOnly -and $PublishOnly) { throw "-BuildOnly et -PublishOnly s'excluent." }
+
+$out = Join-Path $PSScriptRoot "plugin\bin\Release"
+$work = Join-Path ([IO.Path]::GetTempPath()) "AIRaceEngineer-build-$version"
+$dll = Join-Path $out "AIRaceEngineer.dll"
+$zip = Join-Path $out "client.zip"
+$msi = Join-Path $out "AIRaceEngineer-Setup.msi"
+$exe = Join-Path $out "AIRaceEngineer-Setup.exe"
+$assets = @($dll, $zip, $exe, $msi, (Join-Path $PSScriptRoot "Installer-AIRaceEngineer.cmd"))
+Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
+New-Item -ItemType Directory $work | Out-Null
+
+if (-not $PublishOnly) {
 $buildArgs = @("-c", "Release")
 if ($SimHubDir) { $buildArgs += "-p:SimHubDir=$((Resolve-Path $SimHubDir).Path)" }
 dotnet build (Join-Path $PSScriptRoot "plugin\AIRaceEngineer.csproj") @buildArgs
 if ($LASTEXITCODE -ne 0) { throw "La compilation du plugin a échoué." }
 
-$out = Join-Path $PSScriptRoot "plugin\bin\Release"
-$work = Join-Path ([IO.Path]::GetTempPath()) "AIRaceEngineer-build-$version"
-Remove-Item $work -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory $work | Out-Null
-
 # client.zip : uniquement les fichiers suivis par git (ni .venv, ni modèles, ni secrets)
-$zip = Join-Path $out "client.zip"
 $stage = Join-Path $work "client"
 Remove-Item $zip -Force -ErrorAction SilentlyContinue
 Push-Location $PSScriptRoot
@@ -65,9 +74,6 @@ function Add-LanguageTransform([string]$msi, [string]$mst, [int]$lcid, [string]$
     foreach ($o in $summary, $record, $view, $db, $installer) { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($o) }
 }
 
-$dll = Join-Path $out "AIRaceEngineer.dll"
-$msi = Join-Path $out "AIRaceEngineer-Setup.msi"
-$exe = Join-Path $out "AIRaceEngineer-Setup.exe"
 $productCode = [guid]::NewGuid().ToString("B").ToUpper()   # le même pour les deux langues : la transformation ne change que les textes
 Push-Location $PSScriptRoot
 try {
@@ -91,8 +97,9 @@ Add-LanguageTransform $msi $mst 1036 "x64;1033,1036"
 dotnet build (Join-Path $PSScriptRoot "installer\Setup\Setup.csproj") -c Release "-p:Version=$version" "-p:Msi=$msi" -o (Join-Path $work "setup")
 if ($LASTEXITCODE -ne 0) { throw "La compilation de AIRaceEngineer-Setup.exe a échoué." }
 Copy-Item (Join-Path $work "setup\AIRaceEngineer-Setup.exe") $exe -Force
+}
 
-$assets = @($dll, $zip, $exe, $msi, (Join-Path $PSScriptRoot "Installer-AIRaceEngineer.cmd"))
+foreach ($a in $assets) { if (-not (Test-Path $a)) { throw "Fichier manquant : $a" } }
 if ($BuildOnly) { $assets | ForEach-Object { Write-Host "  $_" }; return }
 
 # Notes de la release : la section de cette version dans CHANGELOG.md (anglais) et CHANGELOG.fr.md (français)

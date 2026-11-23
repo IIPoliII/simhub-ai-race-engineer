@@ -1,6 +1,8 @@
 # Builds the plugin, the voice client and the installer (Setup.exe + MSI) against the latest SimHub.
-# - push (any branch) / pull request: build, and the files are attached to the run (Artifacts).
+# - push (any branch) / pull request: build; the files are attached to the run (Artifacts).
 # - tag vX.Y.Z: build, then publish the GitHub release (notes taken from CHANGELOG.md and CHANGELOG.fr.md).
+# SimHub's installer (third-party code) only runs in the "simhub" job, which can't write to the repository.
+# Publishing runs in a separate job that never touches SimHub's files.
 name: Build
 
 on:
@@ -11,44 +13,83 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: build-${{ github.ref }}
   cancel-in-progress: ${{ github.ref_type != 'tag' }}
 
 jobs:
+  simhub:
+    name: SimHub DLLs
+    runs-on: windows-latest
+    outputs:
+      version: ${{ steps.simhub.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - id: simhub
+        uses: ./.github/actions/simhub
+
   build:
+    name: Build
+    needs: simhub
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: |
             6.0.x
             8.0.x
 
-      - id: simhub
-        uses: ./.github/actions/simhub
+      - uses: actions/cache/restore@v6
+        with:
+          path: simhub-ref
+          key: simhub-dlls-${{ needs.simhub.outputs.version }}
+          fail-on-cache-miss: true
 
-      - name: Build${{ github.ref_type == 'tag' && ' and publish the release' || '' }}
+      - name: Build
         shell: powershell
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          if ($env:GITHUB_REF_TYPE -eq "tag") { .\release.ps1 -SimHubDir simhub-ref }
-          else { .\release.ps1 -SimHubDir simhub-ref -BuildOnly }
+        run: .\release.ps1 -BuildOnly -SimHubDir simhub-ref
 
-      - name: Plugin loads in this SimHub
+      - name: Plugin loads in SimHub ${{ needs.simhub.outputs.version }}
         shell: pwsh
         run: dotnet run --project tools/CompatCheck -c Release -- plugin/bin/Release/AIRaceEngineer.dll simhub-ref
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
-          name: AIRaceEngineer (SimHub ${{ steps.simhub.outputs.version }})
+          name: AIRaceEngineer
+          if-no-files-found: error
           path: |
             plugin/bin/Release/AIRaceEngineer.dll
             plugin/bin/Release/client.zip
             plugin/bin/Release/AIRaceEngineer-Setup.exe
             plugin/bin/Release/AIRaceEngineer-Setup.msi
+
+  publish:
+    name: Publish the release
+    if: github.ref_type == 'tag'
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: AIRaceEngineer
+          path: plugin/bin/Release
+
+      - name: Publish
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: .\release.ps1 -PublishOnly

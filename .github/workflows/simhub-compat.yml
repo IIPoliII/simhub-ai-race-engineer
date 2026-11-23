@@ -1,5 +1,6 @@
 # Every day: does the published plugin still load in the latest SimHub, and does the source still compile against it?
 # If not, an issue is opened (once per SimHub version), before users hit the problem.
+# The check runs read-only (it installs SimHub); only the "report" job can open the issue.
 name: SimHub compatibility
 
 on:
@@ -13,17 +14,34 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 jobs:
   check:
     runs-on: windows-latest
+    outputs:
+      simhub: ${{ steps.simhub.outputs.version }}
+      tag: ${{ steps.published.outputs.tag }}
+      published: ${{ steps.published.outcome }}
+      source: ${{ steps.source.outcome }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 8.0.x
+
+      # Latest published plugin, fetched before SimHub's installer runs
+      - name: Download the published plugin
+        id: release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = gh release view -R $env:GITHUB_REPOSITORY --json tagName -q .tagName
+          "tag=$tag" >> $env:GITHUB_OUTPUT
+          gh release download $tag -R $env:GITHUB_REPOSITORY -p AIRaceEngineer.dll -D published --clobber
 
       - id: simhub
         uses: ./.github/actions/simhub
@@ -34,13 +52,10 @@ jobs:
         id: published
         continue-on-error: true
         shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
         run: |
-          $tag = gh release view -R $env:GITHUB_REPOSITORY --json tagName -q .tagName
-          "tag=$tag" >> $env:GITHUB_OUTPUT
-          gh release download $tag -R $env:GITHUB_REPOSITORY -p AIRaceEngineer.dll -D published --clobber
-          dotnet run --project tools/CompatCheck -c Release -- published/AIRaceEngineer.dll simhub-ref *>&1 | Tee-Object published.txt
+          "tag=${{ steps.release.outputs.tag }}" >> $env:GITHUB_OUTPUT
+          New-Item -ItemType Directory -Force report | Out-Null
+          dotnet run --project tools/CompatCheck -c Release -- published/AIRaceEngineer.dll simhub-ref *>&1 | Tee-Object report/published.txt
           exit $LASTEXITCODE
 
       - name: Source still compiles
@@ -48,28 +63,47 @@ jobs:
         continue-on-error: true
         shell: pwsh
         run: |
-          dotnet build plugin/AIRaceEngineer.csproj -c Release "-p:SimHubDir=$PWD/simhub-ref" *>&1 | Tee-Object source.txt
+          New-Item -ItemType Directory -Force report | Out-Null
+          dotnet build plugin/AIRaceEngineer.csproj -c Release "-p:SimHubDir=$PWD/simhub-ref" *>&1 | Tee-Object report/source.txt
           exit $LASTEXITCODE
 
-      - name: Open an issue
+      - uses: actions/upload-artifact@v7
         if: steps.published.outcome == 'failure' || steps.source.outcome == 'failure'
+        with:
+          name: report
+          path: report
+
+  report:
+    needs: check
+    if: needs.check.outputs.published == 'failure' || needs.check.outputs.source == 'failure'
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: report
+          path: report
+
+      - name: Open an issue
         shell: pwsh
         env:
           GH_TOKEN: ${{ github.token }}
-          SIMHUB: ${{ steps.simhub.outputs.version }}
-          TAG: ${{ steps.published.outputs.tag }}
-          PUBLISHED: ${{ steps.published.outcome }}
-          SOURCE: ${{ steps.source.outcome }}
+          SIMHUB: ${{ needs.check.outputs.simhub }}
+          TAG: ${{ needs.check.outputs.tag }}
+          PUBLISHED: ${{ needs.check.outputs.published }}
+          SOURCE: ${{ needs.check.outputs.source }}
         run: |
           $title = "SimHub $env:SIMHUB breaks the plugin"
           $run = "$env:GITHUB_SERVER_URL/$env:GITHUB_REPOSITORY/actions/runs/$env:GITHUB_RUN_ID"
+          $fence = '```'
           $body = "SimHub **$env:SIMHUB** ([release](https://github.com/SHWotever/SimHub/releases/tag/$env:SIMHUB)), checked by [this run]($run).`n`n"
           if ($env:PUBLISHED -eq "failure") {
-            $body += "### Published plugin ($env:TAG) does not load`n`n``````n" + ((Get-Content published.txt -ErrorAction SilentlyContinue) -join "`n") + "`n```````n`n"
+            $body += "### The published plugin ($env:TAG) does not load`n`n$fence`n" + ((Get-Content report/published.txt -ErrorAction SilentlyContinue) -join "`n") + "`n$fence`n`n"
           }
           if ($env:SOURCE -eq "failure") {
-            $errors = Select-String -Path source.txt -Pattern ': error ' | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique -First 30
-            $body += "### Source does not compile`n`n``````n" + ($errors -join "`n") + "`n```````n"
+            $errors = Select-String -Path report/source.txt -Pattern ': error ' -ErrorAction SilentlyContinue | ForEach-Object { $_.Line.Trim() } | Select-Object -Unique -First 30
+            $body += "### The source does not compile`n`n$fence`n" + ($errors -join "`n") + "`n$fence`n"
           }
           $existing = gh issue list -R $env:GITHUB_REPOSITORY --state open --search "`"$title`" in:title" --json number -q '.[0].number'
           if ($existing) { Write-Host "Issue #$existing is already open." }

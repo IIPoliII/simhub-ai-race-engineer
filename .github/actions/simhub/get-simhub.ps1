@@ -1,19 +1,26 @@
-# Installs a SimHub release on the CI runner (silently, in a temporary folder) and copies its DLLs to $Out.
-# The repository never contains SimHub's DLLs: they are fetched from SimHub's own GitHub releases, only to compile
-# against them and check compatibility.
+# Installs a downloaded SimHub release on the CI runner (silently, in a temporary folder) and copies its DLLs to $Out.
+# The repository never contains SimHub's DLLs: they come from SimHub's own GitHub releases, only to compile against
+# them and check compatibility. The installer runs only if it carries a valid signature from SimHub's publisher.
 param(
     [Parameter(Mandatory)][string]$Version,
+    [Parameter(Mandatory)][string]$Download,   # folder holding the release zip
     [Parameter(Mandatory)][string]$Out
 )
 $ErrorActionPreference = "Stop"
-$tmp = Join-Path ($env:RUNNER_TEMP ?? [IO.Path]::GetTempPath()) "simhub-$Version"
-New-Item -ItemType Directory -Force $tmp | Out-Null
+# SimHub's code signing certificate (SimHubWPF.exe and its installer)
+$Publisher = "O=Nicolas Guilbert"
 
-gh release download $Version -R SHWotever/SimHub -p "*.zip" -D $tmp --clobber
-if ($LASTEXITCODE -ne 0) { throw "Could not download SimHub $Version." }
-Expand-Archive (Get-ChildItem $tmp -Filter *.zip | Select-Object -First 1).FullName -DestinationPath "$tmp\zip" -Force
+$zip = Get-ChildItem $Download -Filter *.zip | Select-Object -First 1
+if (-not $zip) { throw "No SimHub zip in $Download." }
+$tmp = Join-Path $env:RUNNER_TEMP "simhub-$Version"
+Expand-Archive $zip.FullName -DestinationPath "$tmp\zip" -Force
 $setup = Get-ChildItem "$tmp\zip" -Filter *.exe -Recurse | Select-Object -First 1
 if (-not $setup) { throw "No installer in the SimHub $Version zip." }
+
+$sig = Get-AuthenticodeSignature $setup.FullName
+if ($sig.Status -ne "Valid" -or $sig.SignerCertificate.Subject -notlike "*$Publisher*") {
+    throw "$($setup.Name) is not signed by SimHub's publisher ($($sig.Status), $($sig.SignerCertificate.Subject)): not running it."
+}
 
 # Inno Setup, silent, into a folder of our own
 $dir = Join-Path $tmp "install"

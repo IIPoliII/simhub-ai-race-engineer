@@ -1,6 +1,6 @@
 [project]
 name = "ai-race-engineer"
-version = "0.6.1"   # = version du plugin (plugin/AIRaceEngineer.csproj) ; après un changement : uv lock
+version = "0.6.2"   # = version du plugin (plugin/AIRaceEngineer.csproj) ; après un changement : uv lock
 description = "AI Race Engineer: voice client for SimHub (all games) / client vocal pour SimHub (tous les jeux)"
 requires-python = ">=3.11,<3.13"
 dependencies = [

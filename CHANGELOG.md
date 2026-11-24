@@ -5,6 +5,13 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.2] - 2026-11-25
+
+### Fixed
+- Places gained or lost: no more flood of callouts at the start or in a battle. Nothing during the first lap, then
+  a single summary since the grid ("P7, you gained 5 places."); after that at most one callout every 20 seconds,
+  with the summary since the previous one. A place lost then won back isn't announced.
+
 ## [0.6.1] - 2026-11-25
 
 ### Added
@@ -281,6 +288,7 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.6.2]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.4...v0.5.5

@@ -13,7 +13,8 @@ namespace AIRaceEngineer
     internal sealed class Callouts
     {
         private static readonly TimeSpan LapDelay = TimeSpan.FromSeconds(1.5);    // certains jeux mettent à jour LastLapTime en retard
-        private static readonly TimeSpan PositionDebounce = TimeSpan.FromSeconds(3);
+        private static readonly TimeSpan PositionDebounce = TimeSpan.FromSeconds(4);    // place tenue avant d'en parler
+        private static readonly TimeSpan PositionCooldown = TimeSpan.FromSeconds(20);   // entre deux annonces de place
 
         private readonly Func<EngineerSettings> _settings;
         private readonly Action<string> _say;
@@ -22,7 +23,7 @@ namespace AIRaceEngineer
         private DateTime? _pendingLap;
         private bool _pitThisLap, _pendingLapWasPit, _pendingLapValid;
         private int _announcedPos, _candidatePos;
-        private DateTime _candidateSince;
+        private DateTime _candidateSince, _lastPositionCall;
         private int _fuelLevelAnnounced = int.MaxValue;
         private double _minFuel = double.MaxValue;   // plus bas niveau depuis le dernier ravitaillement
 
@@ -46,6 +47,7 @@ namespace AIRaceEngineer
             _pendingLap = null;
             _pitThisLap = false;
             _announcedPos = _candidatePos = 0;
+            _lastPositionCall = DateTime.MinValue;
             _fuelLevelAnnounced = int.MaxValue;
             _minFuel = double.MaxValue;
             _splits = new Dictionary<int, TimeSpan>();
@@ -144,14 +146,18 @@ namespace AIRaceEngineer
                 }
             }
 
-            // --- Positions (course uniquement, après 3 s de stabilité) ---
+            // --- Positions (course uniquement) ---
+            // Pas une annonce par dépassement : une place tenue 4 s, au plus une annonce toutes les 20 s, et le bilan
+            // depuis la dernière annonce (« P7, tu gagnes 5 places »). Rien pendant le premier tour, où tout bouge :
+            // le bilan depuis la grille vient une fois la ligne passée.
             if (s.CallPosition && race && myPos > 0)
             {
-                if (_announcedPos == 0) _announcedPos = myPos;
-                else if (myPos == _announcedPos) _candidatePos = 0;
+                if (_announcedPos == 0) _announcedPos = myPos;   // place sur la grille (ou à l'arrivée du plugin)
+                else if (myPos == _announcedPos) _candidatePos = 0;   // revenu à la place annoncée : rien à dire
                 else if (myPos != _candidatePos) { _candidatePos = myPos; _candidateSince = now; }
-                else if (now - _candidateSince >= PositionDebounce)
+                else if (d.CompletedLaps >= 1 && now - _candidateSince >= PositionDebounce && now - _lastPositionCall >= PositionCooldown)
                 {
+                    _lastPositionCall = now;
                     _say(SpokenPosition(myPos, _announcedPos - myPos, fr));
                     _announcedPos = myPos;
                     _candidatePos = 0;

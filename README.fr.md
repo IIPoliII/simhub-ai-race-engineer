@@ -109,7 +109,7 @@ d'ElevenLabs ouvre un guide pas à pas : où créer le compte, quoi copier, comb
   - Cloudflare : un token API Workers AI et ton Account ID.
 - **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, tour invalidé (dès que le jeu
   l'invalide, puis rappelé avec le temps), écart au meilleur tour à chaque secteur (hors course), écarts
-  devant/derrière (en course), places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce
+  devant/derrière (en course), places gagnées ou perdues (regroupées, rien pendant le premier tour), alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce
   montre un exemple de phrase.
 - **Push-to-talk** : dans **Controls and events**, ajoute un mapping avec l'action
   `AIRaceEnginePlugin.PushToTalk` en mode **During** et appuie sur le bouton de ton volant. Maintiens-le pour

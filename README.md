@@ -108,7 +108,7 @@ ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it c
   - Cloudflare: a Workers AI API token and your Account ID.
 - **Automatic callouts**: lap time compared to the previous one, personal best, lap invalidated (as soon as the
   game invalidates it, then again with the time), gap to your best lap at each sector (outside races), gaps
-  ahead/behind (in races), places gained or lost, fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a
+  ahead/behind (in races), places gained or lost (grouped, nothing during the first lap), fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a
   sample sentence.
 - **Push-to-talk**: in **Controls and events**, add a mapping with the action
   `AIRaceEnginePlugin.PushToTalk` set to **During** and press the button on your wheel. Hold it to talk, or

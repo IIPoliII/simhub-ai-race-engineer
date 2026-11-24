@@ -31,6 +31,10 @@ jobs:
           persist-credentials: false
       - id: simhub
         uses: ./.github/actions/simhub
+        with:
+          # SimHub 9.13.8 (2026-11-24): its installer on GitHub is not signed, so get-simhub.ps1 refuses it.
+          # Pinned to 9.13.7 (signed) until a signed release is out; remove these lines to go back to the latest.
+          version: '9.13.7'
 
   build:
     name: Build

@@ -111,8 +111,9 @@ ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it c
   ahead/behind (in races), places gained or lost, fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a
   sample sentence.
 - **Push-to-talk**: in **Controls and events**, add a mapping with the action
-  `AIRaceEnginePlugin.PushToTalk` and press the button on your wheel. The plugin page shows live
-  whether the button is detected.
+  `AIRaceEnginePlugin.PushToTalk` set to **During** and press the button on your wheel. Hold it to talk, or
+  turn on "Press to talk, press again to send". You can test it without starting a game: the plugin page shows the microphone used, its level and what the
+  engineer understood.
 
 API keys are stored encrypted (Windows DPAPI) in `%LOCALAPPDATA%\AIRaceEngineer\settings.json`.
 

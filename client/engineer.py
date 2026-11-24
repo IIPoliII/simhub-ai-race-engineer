@@ -21,6 +21,7 @@ import traceback
 from pathlib import Path
 
 import httpx
+import numpy as np
 
 import audio
 
@@ -128,6 +129,13 @@ class Plugin:
             return self.get("/snapshot")
         except (httpx.HTTPError, ValueError):
             return None
+
+    def mic(self, kind: str, **params):
+        """Test du push-to-talk dans la page : ce qui a été enregistré (short, rec), puis compris (heard)."""
+        try:
+            self.get("/client-mic", k=kind, **params)
+        except (httpx.HTTPError, ValueError):
+            pass  # plugin d'avant le test du micro
 
     def status(self, message: str, code: str = "loading"):
         """Affiché dans la page du plugin, et dans le journal.
@@ -276,6 +284,7 @@ class Engine:
             self.idle()  # reconnaissance pas chargée : on affiche pourquoi
             return
         text, t_stt = timed(self.stt.transcribe, samples)
+        self.plugin.mic("heard", t=text)
         if not text:
             log(t("  (rien compris)", "  (didn't catch that)"))
             return
@@ -446,7 +455,13 @@ def run(plugin: Plugin, managed: bool):
                 samples = recorder.stop()
                 recording = False
                 audio.beep(900)
-                if time.time() - started >= MIN_RECORDING_S:
+                seconds = time.time() - started
+                peak = float(np.max(np.abs(samples))) if samples.size else 0.0
+                long_enough = seconds >= MIN_RECORDING_S
+                # 0 % seulement pour un silence total (micro coupé) : un micro très faible affiche au moins 1 %
+                plugin.mic("rec" if long_enough else "short", s=f"{seconds:.2f}",
+                           p=max(1, round(peak * 100)) if peak > 0 else 0, dev=recorder.device_name())
+                if long_enough:
                     jobs.put(("audio", samples, None))
         except Exception:
             # Un souci ponctuel (réponse inattendue, carte son) ne doit pas couper la radio : on le note et on continue

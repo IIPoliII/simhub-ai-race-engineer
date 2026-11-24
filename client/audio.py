@@ -22,6 +22,19 @@ class Recorder:
     def _callback(self, indata, frames, time_info, status):
         self._frames.append(indata.copy())
 
+    def device_name(self) -> str:
+        """Micro utilisé (celui par défaut de Windows sauf réglage), affiché dans la page pour le test du micro."""
+        try:
+            name = sd.query_devices(self.device, kind="input")["name"]
+            # MME coupe les noms à 31 caractères : le même micro vu par une autre API Windows a le nom entier
+            if len(name) == 31:
+                name = next((d["name"] for d in sd.query_devices()
+                             if d["max_input_channels"] > 0 and d["name"].startswith(name)
+                             and len(d["name"]) > len(name)), name)
+            return name
+        except Exception:
+            return ""
+
     def stop(self) -> np.ndarray:
         if self._stream is not None:
             self._stream.stop()

@@ -119,8 +119,9 @@ namespace AIRaceEngineer
                         {
                             // La phrase commence par un mot : « 9. 3 dixièmes » serait lu « 9,3 »
                             var delta = (lap - _prevLap).TotalSeconds;
-                            text += " " + (delta < 0 ? (fr ? "Plus rapide de " : "Quicker by ") : (fr ? "Plus lent de " : "Slower by ")) +
-                                    SpokenDelta(Math.Abs(delta), fr) + ".";
+                            var spoken = SpokenDelta(delta, fr);
+                            text += " " + (spoken == null ? (fr ? "Même temps qu'au tour d'avant." : "Same as the lap before.")
+                                : (delta < 0 ? (fr ? "Plus rapide de " : "Quicker by ") : (fr ? "Plus lent de " : "Slower by ")) + spoken + ".");
                         }
                         parts.Add(text);
                     }
@@ -196,30 +197,36 @@ namespace AIRaceEngineer
             return minutes >= 1 ? $"{minutes} minute{(minutes > 1 ? "s" : "")} {sec}" : sec;
         }
 
-        private static readonly string[] TenthsFr = { "", "un dixième", "deux dixièmes", "trois dixièmes", "quatre dixièmes", "cinq dixièmes", "six dixièmes", "sept dixièmes", "huit dixièmes", "neuf dixièmes" };
-        private static readonly string[] TenthsEn = { "", "a tenth", "two tenths", "three tenths", "four tenths", "five tenths", "six tenths", "seven tenths", "eight tenths", "nine tenths" };
+        private static readonly string[] DigitsFr = { "", "un", "deux", "trois", "quatre", "cinq", "six", "sept", "huit", "neuf" };
+        private static readonly string[] DigitsEn = { "", "a", "two", "three", "four", "five", "six", "seven", "eight", "nine" };
 
+        /// <summary>« trois dixièmes », « deux centièmes », « quatre millièmes », « 1,2 secondes » ;
+        /// null quand l'écart s'arrondit à zéro millième.</summary>
         internal static string SpokenDelta(double seconds, bool fr)
         {
-            if (seconds < 0.05) return fr ? "moins d'un dixième" : "less than a tenth";
-            if (seconds < 0.95)
-            {
-                int n = Math.Max(1, Math.Min(9, (int)Math.Round(seconds * 10)));
-                return fr ? TenthsFr[n] : TenthsEn[n];
-            }
+            seconds = Math.Abs(seconds);
+            if (seconds < 0.0095) return Fraction((int)Math.Round(seconds * 1000), fr ? "millième" : "thousandth", fr);
+            if (seconds < 0.095) return Fraction((int)Math.Round(seconds * 100), fr ? "centième" : "hundredth", fr);
+            if (seconds < 0.95) return Fraction((int)Math.Round(seconds * 10), fr ? "dixième" : "tenth", fr);
             return fr
                 ? seconds.ToString("0.0", CultureInfo.GetCultureInfo("fr-FR")) + " secondes"
                 : seconds.ToString("0.0", CultureInfo.InvariantCulture) + " seconds";
         }
 
+        private static string Fraction(int n, string unit, bool fr)
+        {
+            if (n <= 0) return null;
+            n = Math.Min(9, n);
+            return (fr ? DigitsFr[n] : DigitsEn[n]) + " " + unit + (n > 1 ? "s" : "");
+        }
+
         /// <summary>Écart cumulé au meilleur tour à la fin d'un secteur : « Secteur 2 : trois dixièmes d'avance. »</summary>
         internal static string SpokenSplit(int sector, double delta, bool fr)
         {
-            double a = Math.Abs(delta);
-            if (a < 0.05) return fr ? $"Secteur {sector} : même temps." : $"Sector {sector}: same time.";
-            var d = SpokenDelta(a, fr);
-            return fr ? $"Secteur {sector} : {d} " + (delta < 0 ? "d'avance." : "de retard.")
-                      : $"Sector {sector}: {d} " + (delta < 0 ? "up." : "down.");
+            var spoken = SpokenDelta(delta, fr);
+            if (spoken == null) return fr ? $"Secteur {sector} : même temps." : $"Sector {sector}: same time.";
+            return fr ? $"Secteur {sector} : {spoken} " + (delta < 0 ? "d'avance." : "de retard.")
+                      : $"Sector {sector}: {spoken} " + (delta < 0 ? "up." : "down.");
         }
 
         private static string SpokenGap(Opponent o, bool fr)

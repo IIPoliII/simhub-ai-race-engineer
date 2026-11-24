@@ -5,6 +5,21 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.1] - 2026-11-25
+
+### Added
+- "Press to talk, press again to send" push-to-talk, instead of holding the button: a setting in the Push-to-talk
+  card. It works with every SimHub press type, and the radio closes on its own after 30 seconds.
+- Push-to-talk test in the page, without starting a game: hold your button, say something and release. The
+  Push-to-talk card shows the microphone used, its level and the sentence understood, or what's in the way: button
+  released too quickly, silent microphone, voice client stopped.
+- A push-to-talk mapping set to "ShortPress" is detected: SimHub then sends the press and the release at once and
+  nothing is recorded. The page says to pick "During" (or the press / press again mode).
+
+### Fixed
+- Sector times: a gap of a few thousandths is no longer called "same time". The engineer says "four thousandths"
+  or "two hundredths up", and "same time" only for a tie to the thousandth. Same for the gap to the previous lap.
+
 ## [0.6.0] - 2026-11-24
 
 ### Added
@@ -266,6 +281,8 @@ All notable changes to this project are documented here. The format follows
 - First version: SimHub plugin with JSON telemetry, Python voice client (local Whisper, AI, voice), push-to-talk.
 - One-line installer and updates from SimHub.
 
+[0.6.1]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.6.0...v0.6.1
+[0.6.0]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.5...v0.6.0
 [0.5.5]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.4...v0.5.5
 [0.5.4]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.3...v0.5.4
 [0.5.3]: https://github.com/IIPoliII/simhub-ai-race-engineer/compare/v0.5.2...v0.5.3

@@ -112,8 +112,9 @@ d'ElevenLabs ouvre un guide pas à pas : où créer le compte, quoi copier, comb
   devant/derrière (en course), places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce
   montre un exemple de phrase.
 - **Push-to-talk** : dans **Controls and events**, ajoute un mapping avec l'action
-  `AIRaceEnginePlugin.PushToTalk` et appuie sur le bouton de ton volant. La page du plugin montre en direct
-  si le bouton est détecté.
+  `AIRaceEnginePlugin.PushToTalk` en mode **During** et appuie sur le bouton de ton volant. Maintiens-le pour
+  parler, ou active « Appuyer pour parler, réappuyer pour envoyer ». Tu peux tester sans lancer de jeu : la page du plugin montre le micro utilisé, son niveau et ce que l'ingé
+  a compris.
 
 Les clés API sont enregistrées chiffrées (DPAPI Windows) dans `%LOCALAPPDATA%\AIRaceEngineer\settings.json`.
 

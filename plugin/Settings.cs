@@ -230,6 +230,8 @@ namespace AIRaceEngineer
 
         public bool AutoStartClient { get; set; } = true;
         public bool PttTested { get; set; }
+        /// <summary>Un appui ouvre la radio, l'appui suivant envoie (au lieu de maintenir le bouton).</summary>
+        public bool PttToggle { get; set; }
         public bool WelcomeShown { get; set; }   // fenêtre de bienvenue déjà montrée au premier démarrage
         public string NotesSeenVersion { get; set; }  // dernière version dont les nouveautés ont été montrées (0.5.3+)
 

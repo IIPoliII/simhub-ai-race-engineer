@@ -57,12 +57,20 @@ namespace AIRaceEngineer
         public string ClientState => _clientState;
         private static string _clientStatus = "", _clientState = "";
         public bool PushToTalkDown => _ptt;
+        /// <summary>Dernier appui sur le push-to-talk et ce que le client en a fait (test dans la page), ou null.</summary>
+        public PttReport LastPtt => _pttReport;
         public bool ClientConnected => (DateTime.UtcNow - _lastClientPoll).TotalSeconds < 2;
         public string Url => $"http://127.0.0.1:{Port}/snapshot";
 
         private SnapshotServer _server;
         private Callouts _callouts;
         private volatile bool _ptt;
+        private long _pttDownAt;
+        private bool _pttLatched;   // radio ouverte par un appui (mode appuyer / réappuyer)
+        private System.Threading.Timer _pttTimeout;
+        /// <summary>Mode appuyer / réappuyer : radio refermée toute seule si on oublie de réappuyer.</summary>
+        private const int MaxToggleMs = 30000;
+        private volatile PttReport _pttReport;
         private volatile bool _ended;
         private static DateTime _lastClientPoll = DateTime.MinValue;
         private System.Threading.Timer _watchdog;
@@ -114,12 +122,7 @@ namespace AIRaceEngineer
             _callouts = new Callouts(() => Settings, Say);
 
             // Push-to-talk : à associer à un bouton dans Controls and events
-            pluginManager.AddAction(PushToTalkAction, GetType(), (pm, a) =>
-            {
-                _ptt = true;
-                Signal();
-                if (!Settings.PttTested) { Settings.PttTested = true; SettingsChanged(); }
-            }, (pm, a) => { _ptt = false; Signal(); });
+            pluginManager.AddAction(PushToTalkAction, GetType(), (pm, a) => PttPressed(), (pm, a) => PttReleased());
 
             _server = new SnapshotServer(Port, Route);
             try
@@ -149,6 +152,7 @@ namespace AIRaceEngineer
         {
             lock (_watchdogLock) _ended = true; // plus aucun tic ne lance le client après le Client.Stop() ci-dessous
             _watchdog?.Dispose();
+            _pttTimeout?.Dispose();
             Signal();
             // SimHub relance aussi le gestionnaire de plugins (changement de jeu…) : seule une vraie fermeture arrête le client
             bool exiting = IsAppExiting(pluginManager);
@@ -321,6 +325,7 @@ namespace AIRaceEngineer
         /// <summary>À appeler après chaque modification des réglages dans le panneau.</summary>
         public void SettingsChanged()
         {
+            if (!Settings.PttToggle && _pttLatched) PttStop(); // retour au mode maintenu : la radio ouverte se referme
             L10n.Language = Settings.Language;
             try { Settings.Save(); }
             catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] sauvegarde : " + ex.Message); }
@@ -383,6 +388,60 @@ namespace AIRaceEngineer
             return diff == 0;
         }
 
+        // ---------- Push-to-talk ----------
+        // Deux façons de parler : maintenir le bouton (relâcher envoie), ou appuyer pour ouvrir la radio
+        // et réappuyer pour envoyer. En mode appuyer / réappuyer, le relâchement est ignoré : tous les types
+        // d'appui de SimHub conviennent, ShortPress compris.
+
+        private void PttPressed()
+        {
+            lock (_pttLock)
+            {
+                if (_ptt && _pttLatched) { PttStop(); return; }   // deuxième appui : on envoie
+                if (_ptt) return;
+                _pttDownAt = System.Diagnostics.Stopwatch.GetTimestamp();
+                _pttLatched = Settings.PttToggle;
+                _ptt = true;
+                if (_pttLatched)
+                {
+                    long started = _pttDownAt;
+                    _pttTimeout?.Dispose();
+                    _pttTimeout = new System.Threading.Timer(_ => { lock (_pttLock) if (_ptt && _pttDownAt == started) PttStop(); },
+                                                             null, MaxToggleMs, System.Threading.Timeout.Infinite);
+                }
+            }
+            Signal();
+            if (!Settings.PttTested) { Settings.PttTested = true; SettingsChanged(); }
+        }
+
+        private void PttReleased()
+        {
+            lock (_pttLock) if (_ptt && !_pttLatched) PttStop();
+        }
+
+        /// <summary>Referme la radio : le client envoie ce qu'il a enregistré.</summary>
+        private void PttStop()
+        {
+            lock (_pttLock)
+            {
+                if (!_ptt) return;
+                // Durée vue par SimHub : maintenu, un mapping en ShortPress envoie l'appui et le relâchement d'un coup
+                _pttReport = new PttReport
+                {
+                    At = DateTime.UtcNow,
+                    Toggle = _pttLatched,
+                    PressMs = (int)((System.Diagnostics.Stopwatch.GetTimestamp() - _pttDownAt) * 1000 / System.Diagnostics.Stopwatch.Frequency),
+                };
+                _pttLatched = false;
+                _ptt = false;
+                _pttTimeout?.Dispose();
+                _pttTimeout = null;
+            }
+            Signal();
+        }
+
+        private readonly object _pttLock = new object();
+
         private string Route(string path, Dictionary<string, string> query, string auth)
         {
             switch (path)
@@ -403,6 +462,10 @@ namespace AIRaceEngineer
                         _clientStatus = m.Length > 200 ? m.Substring(0, 200) : m;
                         _clientState = query.TryGetValue("c", out var c) ? c : LegacyState(m);
                     }
+                    return "{}";
+                case "/client-mic":
+                    if (!Authorized(auth)) throw new UnauthorizedAccessException();
+                    _pttReport = PttReport.From(_pttReport, query);
                     return "{}";
                 default:
                     return null;

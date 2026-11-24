@@ -55,7 +55,8 @@ namespace AIRaceEngineer
         private bool _saySeen, _sayBusyLast;
         private string _clientButtonLabel;
         private Ellipse _pttLamp;
-        private bool? _pttLast;
+        private string _pttLast;
+        private TextBlock _pttResult;
         private StackPanel _providerFields, _voiceFields, _calloutRows;
         private ComboBox _modelCombo;
         private bool _fillingModels;
@@ -591,10 +592,12 @@ namespace AIRaceEngineer
             }
 
             // Push-to-talk
-            if (_plugin.PushToTalkDown) _pttCell.Set(T("Appuyé", "Pressed"), T("Parle, puis relâche pour envoyer", "Speak, then release to send"), Theme.B("Ok"));
-            else if (S.PttTested) _pttCell.Set(T("Associé", "Mapped"), T("Maintiens ton bouton pour parler", "Hold your button to talk"), Theme.B("Ok"));
+            if (_plugin.PushToTalkDown) _pttCell.Set(T("Appuyé", "Pressed"), S.PttToggle ? T("Parle, puis réappuie pour envoyer", "Speak, then press again to send") : T("Parle, puis relâche pour envoyer", "Speak, then release to send"), Theme.B("Ok"));
+            else if (_plugin.LastPtt?.Pulse == true && !S.PttToggle)
+                _pttCell.Set(T("Mal associé", "Wrong mapping"), T("En ShortPress : choisis During dans le mapping", "Set to ShortPress: pick During in the mapping"), Theme.B("Warn"));
+            else if (S.PttTested) _pttCell.Set(T("Associé", "Mapped"), S.PttToggle ? T("Appuie pour parler, réappuie pour envoyer", "Press to talk, press again to send") : T("Maintiens ton bouton pour parler", "Hold your button to talk"), Theme.B("Ok"));
             else _pttCell.Set(T("Non associé", "Not mapped"), T("Associe un bouton du volant puis appuie dessus", "Map a wheel button, then press it"), Theme.B("Warn"));
-            _pttCell.Actions.Visibility = S.PttTested ? Visibility.Hidden : Visibility.Visible;
+            _pttCell.Actions.Visibility = S.PttTested && (_plugin.LastPtt?.Pulse != true || S.PttToggle) ? Visibility.Hidden : Visibility.Visible;
 
             // Jeu
             if (_plugin.ServerError != null) _gameCell.Set(T("Port occupé", "Port in use"), _plugin.ServerError, Theme.B("Bad"));
@@ -1041,7 +1044,7 @@ namespace AIRaceEngineer
 
         private Border BuildPttCard()
         {
-            var (card, body) = Section("Push-to-talk", T("Maintiens un bouton du volant pour parler, relâche pour envoyer", "Hold a wheel button to talk, release to send"));
+            var (card, body) = Section("Push-to-talk", T("Un bouton du volant pour parler à l'ingé", "A wheel button to talk to the engineer"));
 
             var grid = new Grid();
             grid.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
@@ -1051,8 +1054,9 @@ namespace AIRaceEngineer
             var texts = new[]
             {
                 T("Ouvre Controls and events dans SimHub", "Open Controls and events in SimHub"),
-                T($"Ajoute un mapping avec l'action AIRaceEnginePlugin.{AIRaceEnginePlugin.PushToTalkAction}", $"Add a mapping with the AIRaceEnginePlugin.{AIRaceEnginePlugin.PushToTalkAction} action"),
+                T($"Ajoute un mapping avec l'action AIRaceEnginePlugin.{AIRaceEnginePlugin.PushToTalkAction}, en mode During", $"Add a mapping with the AIRaceEnginePlugin.{AIRaceEnginePlugin.PushToTalkAction} action, set to During"),
                 T("Appuie sur le bouton du volant à associer", "Press the wheel button to map"),
+                T("Teste ici, sans jeu : dis une phrase à la radio, la page montre ce que l'ingé a entendu", "Test it here, no game needed: say something on the radio, the page shows what the engineer heard"),
             };
             for (int i = 0; i < texts.Length; i++)
             {
@@ -1077,18 +1081,79 @@ namespace AIRaceEngineer
             grid.Children.Add(tester);
 
             body.Children.Add(grid);
+            body.Children.Add(ToggleRow(T("Appuyer pour parler, réappuyer pour envoyer", "Press to talk, press again to send"),
+                T("Au lieu de maintenir le bouton. Marche avec tous les types d'appui de SimHub ; la radio se referme seule après 30 secondes",
+                  "Instead of holding the button. Works with every SimHub press type; the radio closes on its own after 30 seconds"),
+                S.PttToggle, v => { S.PttToggle = v; Changed(); }));
+            // Résultat du dernier essai : mapping, micro utilisé, niveau, phrase comprise
+            _pttResult = new TextBlock { TextWrapping = TextWrapping.Wrap, FontSize = 13, Margin = new Thickness(0, 12, 0, 0), Visibility = Visibility.Collapsed };
+            body.Children.Add(_pttResult);
             return card;
         }
 
         private void RefreshPtt()
         {
             bool down = _plugin.PushToTalkDown;
-            if (_pttLast == down) return;
-            _pttLast = down;
-            _pttLamp.Fill = down ? Theme.B("Ok") : Theme.B("Raised");
-            _pttLamp.Stroke = down ? Theme.B("Ok") : Theme.B("Line");
-            _pttLampText.Text = down ? T("Je t'écoute", "Listening") : T("Appuie pour tester", "Press to test");
-            _pttLampText.Foreground = down ? Theme.B("Ok") : Theme.B("Muted");
+            var r = _plugin.LastPtt;
+            var age = r == null ? 0 : (DateTime.UtcNow - r.At).TotalSeconds;
+            // Un appui en ShortPress ne dure pas assez pour allumer la lampe : elle s'allume en orange un instant
+            bool pulse = !down && r != null && r.Pulse && !S.PttToggle && age < 1.5;
+            bool waiting = r != null && r.Kind == null && age < 3;
+            var key = $"{down}|{pulse}|{waiting}|{r?.At.Ticks}|{r?.Kind}|{r?.Text}|{_plugin.ClientConnected}|{S.PttToggle}";
+            if (_pttLast == key) return;
+            _pttLast = key;
+
+            var lamp = down ? Theme.B("Ok") : pulse ? Theme.B("Warn") : null;
+            _pttLamp.Fill = lamp ?? Theme.B("Raised");
+            _pttLamp.Stroke = lamp ?? Theme.B("Line");
+            _pttLampText.Text = down ? (S.PttToggle ? T("Je t'écoute, réappuie pour envoyer", "Listening, press again to send") : T("Je t'écoute", "Listening"))
+                : pulse ? T("Relâché aussitôt", "Released at once") : T("Appuie pour tester", "Press to test");
+            _pttLampText.Foreground = lamp ?? Theme.B("Muted");
+
+            _pttResult.Inlines.Clear();
+            var (main, detail, color) = down ? (null, null, null) : PttResult(r, waiting);
+            _pttResult.Visibility = main == null ? Visibility.Collapsed : Visibility.Visible;
+            if (main == null) return;
+            _pttResult.Inlines.Add(new Run(main) { Foreground = color });
+            if (detail != null) _pttResult.Inlines.Add(new Run("\n" + detail) { Foreground = Theme.B("Muted"), FontSize = 12 });
+        }
+
+        /// <summary>Ce que le dernier appui a donné, du mapping jusqu'à la phrase comprise.</summary>
+        private (string main, string detail, Brush color) PttResult(PttReport r, bool waiting)
+        {
+            if (r == null) return (null, null, null);
+            var c = L10n.Language == "fr" ? CultureInfo.GetCultureInfo("fr-FR") : CultureInfo.InvariantCulture;
+            if (r.Pulse && !S.PttToggle)
+                return (T("Le bouton envoie l'appui et le relâchement d'un coup : le mapping est en ShortPress.",
+                          "The button sends the press and the release at once: the mapping is set to ShortPress."),
+                        T("Dans Controls and events, clique sur ShortPress à gauche du mapping et choisis During. Ou active « Appuyer pour parler, réappuyer pour envoyer » ci-dessus.",
+                          "In Controls and events, click ShortPress on the left of the mapping and pick During. Or turn on « Press to talk, press again to send » above."), Theme.B("Warn"));
+            var held = (r.PressMs / 1000.0).ToString("0.0", c) + " s";
+            var press = r.Toggle ? T($"Radio ouverte {held}", $"Radio open for {held}") : T($"Appui de {held} reçu", $"{held} press received");
+            if (r.Kind == null)
+                return waiting ? (press, null, Theme.B("Muted"))
+                    : !_plugin.ClientConnected ? (press + T(", mais le client vocal n'est pas lancé", ", but the voice client isn't running"), null, Theme.B("Warn"))
+                    : (press + T(", mais rien d'enregistré", ", but nothing was recorded"),
+                       T("L'état du client vocal, en haut de la page, dit pourquoi (micro introuvable ?)", "The voice client status at the top of the page says why (microphone not found?)"), Theme.B("Warn"));
+
+            var mic = r.Device != null ? T($"micro « {r.Device} »", $"microphone \"{r.Device}\"") : T("micro par défaut", "default microphone");
+            var level = r.Peak >= 0 ? T($", niveau {r.Peak} %", $", level {r.Peak}%") : "";
+            var detail = r.Seconds.ToString("0.0", c) + " s, " + mic + level;
+            var windowsMic = T("Choisis le bon micro dans Windows : Paramètres → Système → Son → Entrée",
+                               "Pick the right microphone in Windows: Settings → System → Sound → Input");
+            if (r.Kind == "short")
+                return (r.Toggle ? T("Trop court : réappuie seulement quand tu as fini de parler", "Too short: press again only once you've finished talking")
+                                 : T("Trop court : garde le bouton enfoncé pendant que tu parles", "Too short: hold the button while you talk"), detail, Theme.B("Warn"));
+            if (r.Peak == 0)
+                return (T($"Aucun son reçu du {mic}", $"No sound from the {mic}"), windowsMic, Theme.B("Bad"));
+            if (r.Kind == "rec")
+                return (T("Enregistré, transcription…", "Recorded, transcribing…"), detail, Theme.B("Muted"));
+            bool faint = r.Peak >= 0 && r.Peak < 5;
+            if (string.IsNullOrEmpty(r.Text))
+                return (faint ? T("Rien compris : le micro est presque muet", "Didn't catch anything: the microphone is almost silent")
+                              : T("Rien compris : parle plus fort ou plus près du micro", "Didn't catch anything: speak louder or closer to the microphone"),
+                        detail + (faint ? "\n" + windowsMic : ""), Theme.B("Warn"));
+            return (T($"Entendu : « {r.Text} »", $"Heard: \"{r.Text}\""), detail, Theme.B("Ok"));
         }
 
         // =====================================================================

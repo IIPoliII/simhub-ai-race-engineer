@@ -332,9 +332,13 @@ namespace AIRaceEngineer
 
             body.Children.Add(Heading(T("3. Le push-to-talk", "3. Push-to-talk"), 18));
             body.Children.Add(Para(T("Dans SimHub, ouvre « Controls and events », ajoute un mapping avec l'action `AIRaceEnginePlugin.PushToTalk` " +
-                                     "et appuie sur le bouton de ton volant. La page du plugin indique quand le bouton est détecté.",
+                                     "en mode « During » et appuie sur le bouton de ton volant. Tu préfères appuyer une fois pour parler et réappuyer " +
+                                     "pour envoyer ? Active-le dans la carte Push-to-talk. Teste sans lancer de jeu : " +
+                                     "la page du plugin montre ce que l'ingé a entendu.",
                                      "In SimHub, open « Controls and events », add a mapping with the `AIRaceEnginePlugin.PushToTalk` action " +
-                                     "and press your wheel button. The plugin page shows when the button is detected."), "Text", 13, 0, 18));
+                                     "set to « During » and press your wheel button. Rather press once to talk and again to send? Turn it on " +
+                                     "in the Push-to-talk card. Test it without starting a game: " +
+                                     "the plugin page shows what the engineer heard."), "Text", 13, 0, 18));
 
             body.Children.Add(Para(T("Tu retrouves cette fenêtre avec le bouton ? en haut de la page du plugin.",
                                      "You can open this window again with the ? button at the top of the plugin page."), "Muted", 12, 0, 0));

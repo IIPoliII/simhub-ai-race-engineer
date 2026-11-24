@@ -558,6 +558,8 @@ namespace AIRaceEngineer
             {
                 switch (_plugin.ClientState)
                 {
+                    // Relancé tout seul après un arrêt : on le montre (sinon « Prêt » le cacherait), jusqu'à un Redémarrer
+                    case "ready" when client.LastCrash is string crash: _clientCell.Set(connected, crash, Theme.B("Warn"), crash); break;
                     case "ready": _clientCell.Set(connected, T("Prêt à répondre", "Ready to answer"), Theme.B("Ok")); break;
                     case "speaking": _clientCell.Set(connected, T("À la radio", "On the radio"), Theme.B("Ok")); break;
                     case "warn":
@@ -676,7 +678,8 @@ namespace AIRaceEngineer
             {
                 var url = Text(info.BaseUrl(p), v => { p.BaseUrl = v; ChangedSoon(); });
                 url.LostFocus += reload;
-                _providerFields.Children.Add(Field(T("URL de l'API", "API URL"), url, T("Ollama : http://localhost:11434/v1", "Ollama: http://localhost:11434/v1")));
+                _providerFields.Children.Add(Field(T("URL de l'API", "API URL"), url, T("Ollama : http://localhost:11434 · LM Studio : http://localhost:1234 (/v1 ajouté s'il manque)",
+                                                                                                "Ollama: http://localhost:11434 · LM Studio: http://localhost:1234 (/v1 added if missing)")));
             }
             if (info.AccountLabel != null)
             {
@@ -870,19 +873,79 @@ namespace AIRaceEngineer
             body.Children.Add(_voiceFields);
             RebuildVoiceFields();
 
+            // Volume de la voix, quel que soit le moteur
+            body.Children.Add(Field(T("Volume", "Volume"), Volume(T("Volume de la voix", "Voice volume"), S.VoiceVolume, 50, 200, v => S.VoiceVolume = v),
+                T("Au-delà de 100 %, les crêtes sont arrondies pour ne pas saturer", "Above 100%, peaks are rounded off so it doesn't distort")));
+
             body.Children.Add(Field(T("Reconnaissance", "Recognition"), Combo(new[]
             {
                 ("small", T("Précise, environ 1,3 s", "Accurate, about 1.3 s")),
                 ("base", T("Rapide, environ 0,4 s", "Fast, about 0.4 s")),
             }, S.SttModel, v => { S.SttModel = v; Changed(); })));
             body.Children.Add(Divider());
-            FrameworkElement track = null;
-            body.Children.Add(ToggleRow(T("Effet radio", "Radio effect"), T("Filtre radio et léger grésillement", "Radio filter and light crackle"), S.RadioEffect, v => { S.RadioEffect = v; track.IsEnabled = v; Changed(); }));
+            FrameworkElement track = null, noise = null;
+            body.Children.Add(ToggleRow(T("Effet radio", "Radio effect"), T("Filtre radio et léger grésillement", "Radio filter and light crackle"), S.RadioEffect, v =>
+            {
+                S.RadioEffect = v;
+                track.IsEnabled = v;
+                noise.IsEnabled = v && S.TrackNoise;
+                Changed();
+            }));
             track = ToggleRow(T("Bruits de piste", "Track noise"), T("Des F1 passent parfois derrière l'ingé, jamais deux fois pareil. Sa voix reste devant",
-                                                                  "F1 cars sometimes pass behind the engineer, never the same way twice. The voice stays in front"), S.TrackNoise, v => { S.TrackNoise = v; Changed(); });
+                                                                  "F1 cars sometimes pass behind the engineer, never the same way twice. The voice stays in front"), S.TrackNoise, v =>
+            {
+                S.TrackNoise = v;
+                noise.IsEnabled = v && S.RadioEffect;
+                Changed();
+            });
             track.IsEnabled = S.RadioEffect;
             body.Children.Add(track);
+            // Le fond seulement : la voix reste au volume réglé plus haut
+            noise = Field(T("Volume du fond", "Noise level"), Volume(T("Volume du fond", "Noise level"), S.NoiseVolume, 0, 200, v => S.NoiseVolume = v));
+            noise.IsEnabled = S.RadioEffect && S.TrackNoise;
+            body.Children.Add(noise);
             return card;
+        }
+
+        /// <summary>
+        /// Curseur de volume en %, avec sa valeur à droite. La valeur change en mémoire tout de suite, mais n'est
+        /// enregistrée et envoyée au client qu'au lâcher (ou après une pause au clavier) : pas un envoi par pixel.
+        /// </summary>
+        private FrameworkElement Volume(string name, int value, int min, int max, Action<int> onChange)
+        {
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(52) });
+            var slider = new Slider
+            {
+                Style = Theme.S("Slider"), Minimum = min, Maximum = max, Value = Math.Max(min, Math.Min(max, value)),
+                SmallChange = 5, LargeChange = 10, TickFrequency = 5, IsSnapToTickEnabled = true,
+                ToolTip = T("Double-clic : 100 %", "Double-click: 100%"),
+            };
+            // Field n'étiquette que les contrôles : ici une grille, on nomme donc le curseur lui-même
+            AutomationProperties.SetName(slider, name);
+            var label = new TextBlock
+            {
+                FontFamily = Theme.Mono, FontSize = 12, Foreground = Theme.B("Text2"),
+                HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center,
+            };
+            void Show(int v) => label.Text = v + " %";
+            Show((int)slider.Value);
+            slider.ValueChanged += (s, e) =>
+            {
+                int v = (int)Math.Round(e.NewValue);
+                Show(v);
+                onChange(v);
+                ChangedSoon();
+            };
+            // Au lâcher de la souris, tout de suite : le prochain message de l'ingé a le nouveau volume
+            slider.LostMouseCapture += (s, e) => FlushPendingSave();
+            // Double-clic : retour à 100 %
+            slider.MouseDoubleClick += (s, e) => slider.Value = Math.Max(min, Math.Min(max, 100));
+            g.Children.Add(slider);
+            Grid.SetColumn(label, 1);
+            g.Children.Add(label);
+            return g;
         }
 
         private void RebuildVoiceFields()
@@ -955,6 +1018,12 @@ namespace AIRaceEngineer
             rows.Add(ToggleRow(T("Temps au tour", "Lap time"), lap, S.CallLapTime, v => { S.CallLapTime = v; Changed(); }, radio: true));
             rows.Add(Divider());
             rows.Add(ToggleRow(T("Meilleur tour", "Personal best"), fr ? "Meilleur tour !" : "Personal best!", S.CallPersonalBest, v => { S.CallPersonalBest = v; Changed(); }, radio: true));
+            rows.Add(Divider());
+            rows.Add(ToggleRow(T("Tour invalidé, dès que le jeu l'invalide", "Lap invalidated, as soon as the game says so"),
+                fr ? "Tour invalidé." : "Lap invalidated.", S.CallInvalidLap, v => { S.CallInvalidLap = v; Changed(); }, radio: true));
+            rows.Add(Divider());
+            rows.Add(ToggleRow(T("Secteurs, hors course : écart au meilleur tour", "Sectors, outside races: gap to your best lap"),
+                Callouts.SpokenSplit(1, -0.2, fr) + " " + Callouts.SpokenSplit(2, 0.1, fr), S.CallSplits, v => { S.CallSplits = v; Changed(); }, radio: true));
             rows.Add(Divider());
             rows.Add(ToggleRow(T("Écarts, en course", "Gaps, in races"), gaps, S.CallGaps, v => { S.CallGaps = v; Changed(); }, radio: true));
             rows.Add(Divider());

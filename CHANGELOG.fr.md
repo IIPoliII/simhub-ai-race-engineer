@@ -5,6 +5,30 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.6.0] - 2026-11-24
+
+### Ajouté
+- Volume de la voix et volume des bruits de piste : deux curseurs dans « Langue et voix ». La voix monte jusqu'à
+  200 % sans saturer (les crêtes sont arrondies), le fond va de 0 à 200 %. Double-clic : retour à 100 %. Changer un
+  volume ne recharge pas la voix.
+- Annonce « Tour invalidé. » dès que le jeu invalide ton tour (hors limites, coupe...), et le temps du tour le
+  rappelle : « Tour en 1 minute 47 secondes 3, invalidé. »
+- Temps intermédiaires hors course (essais, qualifs, hotlap) : à la fin de chaque secteur, l'ingé te dit ton avance
+  ou ton retard sur ton meilleur tour, par exemple « Secteur 2 : trois dixièmes d'avance. » Rien en course, ni pour
+  un tour déjà invalidé ou parti des stands.
+
+### Corrigé
+- IA « Autre » (Ollama, LM Studio) : une URL sans `/v1` (`http://10.0.0.5:11434/`) répondait « Adresse introuvable
+  (404) » et la liste des modèles restait vide. Le `/v1` est maintenant ajouté s'il manque.
+- IA « Autre » : les modèles qui réfléchissent avant de répondre (Qwen3...) répondaient vide, leur réflexion prenant
+  toute la place. L'ingé leur demande maintenant de répondre directement ; un serveur qui ne connaît pas ce réglage
+  est réinterrogé sans.
+- Après un arrêt imprévu du client vocal, sa relance automatique ne dit plus « Radio check, je t'entends » en pleine
+  course (à la place du temps au tour). La page montre en orange qu'il a été relancé et pourquoi, et le journal
+  garde ce qui s'est passé avant l'arrêt.
+- Le client vocal ne s'arrête plus quand SimHub met plus de 20 secondes à répondre : il attend tant que SimHub
+  tourne. Un souci ponctuel dans sa boucle est noté dans le journal au lieu de l'arrêter.
+
 ## [0.5.5] - 2026-11-23
 
 ### Corrigé

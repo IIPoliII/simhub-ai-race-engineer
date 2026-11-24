@@ -7,7 +7,7 @@ namespace AIRaceEngineer
 {
     /// <summary>
     /// Annonces automatiques (sans IA, donc instantanées et gratuites) :
-    /// temps au tour, meilleur tour, écarts, positions, carburant.
+    /// temps au tour, meilleur tour, tour invalidé, secteurs, écarts, positions, carburant.
     /// Le texte est écrit pour être lu à voix haute.
     /// </summary>
     internal sealed class Callouts
@@ -26,6 +26,12 @@ namespace AIRaceEngineer
         private int _fuelLevelAnnounced = int.MaxValue;
         private double _minFuel = double.MaxValue;   // plus bas niveau depuis le dernier ravitaillement
 
+        // Secteurs : temps écoulé dans le tour à la fin de chaque secteur (numéro du secteur fini → temps)
+        private Dictionary<int, TimeSpan> _splits = new Dictionary<int, TimeSpan>();
+        private Dictionary<int, TimeSpan> _pendingSplits, _bestSplits;
+        private bool _pendingLapComplete;   // tour suivi depuis la ligne : ses secteurs peuvent servir de référence
+        private TimeSpan _bestSplitsLap;     // temps du tour de référence des secteurs
+
         public Callouts(Func<EngineerSettings> settings, Action<string> say)
         {
             _settings = settings;
@@ -42,15 +48,43 @@ namespace AIRaceEngineer
             _announcedPos = _candidatePos = 0;
             _fuelLevelAnnounced = int.MaxValue;
             _minFuel = double.MaxValue;
+            _splits = new Dictionary<int, TimeSpan>();
+            _pendingSplits = _bestSplits = null;
+            _bestSplitsLap = TimeSpan.Zero;
         }
 
         /// <param name="valid">tour resté valide jusqu'à la ligne (suivi à chaque image par le plugin)</param>
-        public void OnLapCompleted(bool valid)
+        /// <param name="complete">tour suivi depuis la ligne de départ (pas un tour pris en route au lancement)</param>
+        public void OnLapCompleted(bool valid, bool complete = false)
         {
             _pendingLap = DateTime.UtcNow + LapDelay;
             _pendingLapWasPit = _pitThisLap;
             _pendingLapValid = valid;
+            _pendingLapComplete = complete;
+            _pendingSplits = _splits;
+            _splits = new Dictionary<int, TimeSpan>();
             _pitThisLap = false;
+        }
+
+        /// <summary>Le jeu vient d'invalider le tour en cours (hors limites, coupe...) : appelé une fois par tour.</summary>
+        public void OnLapInvalidated()
+        {
+            var s = _settings();
+            if (s.CallInvalidLap) _say(s.Language == "fr" ? "Tour invalidé." : "Lap invalidated.");
+        }
+
+        /// <summary>Fin d'un secteur (pas le dernier : c'est la fin du tour).</summary>
+        /// <param name="sector">numéro du secteur fini, à partir de 1</param>
+        /// <param name="elapsed">temps écoulé dans le tour</param>
+        /// <param name="countable">tour encore valide et pas parti des stands : son écart a un sens</param>
+        public void OnSector(int sector, TimeSpan elapsed, bool countable, bool race)
+        {
+            if (elapsed <= TimeSpan.Zero) return;
+            _splits[sector] = elapsed;
+            var s = _settings();
+            // En course, l'écart au meilleur tour à chaque secteur serait trop bavard : réservé aux essais, qualifs, hotlap
+            if (!s.CallSplits || race || !countable || _bestSplits == null || !_bestSplits.TryGetValue(sector, out var best)) return;
+            _say(SpokenSplit(sector, (elapsed - best).TotalSeconds, s.Language == "fr"));
         }
 
         public void Update(StatusDataBase d, int myPos, Opponent ahead, Opponent behind)
@@ -78,7 +112,9 @@ namespace AIRaceEngineer
                     if (s.CallPersonalBest && pb) parts.Add(fr ? "Meilleur tour !" : "Personal best!");
                     if (s.CallLapTime)
                     {
-                        var text = (fr ? "Tour en " : "Lap time ") + SpokenLap(lap, fr) + ".";
+                        // Tour invalidé : le temps est donné quand même, mais on dit qu'il ne compte pas
+                        var text = (fr ? "Tour en " : "Lap time ") + SpokenLap(lap, fr) +
+                                   (_pendingLapValid ? "." : fr ? ", invalidé." : ", invalid.");
                         if (_prevLap > TimeSpan.Zero)
                         {
                             // La phrase commence par un mot : « 9. 3 dixièmes » serait lu « 9,3 »
@@ -96,6 +132,13 @@ namespace AIRaceEngineer
                     if (parts.Count > 0) _say(string.Join(" ", parts));
 
                     if (_pendingLapValid && (_sessionBest == TimeSpan.Zero || lap < _sessionBest)) _sessionBest = lap;
+                    // Référence des secteurs : le meilleur tour valide suivi en entier, avec ses temps de secteur
+                    if (_pendingLapValid && _pendingLapComplete && _pendingSplits != null && _pendingSplits.Count > 0 &&
+                        (_bestSplitsLap == TimeSpan.Zero || lap < _bestSplitsLap))
+                    {
+                        _bestSplits = _pendingSplits;
+                        _bestSplitsLap = lap;
+                    }
                     _prevLap = lap;
                 }
             }
@@ -167,6 +210,16 @@ namespace AIRaceEngineer
             return fr
                 ? seconds.ToString("0.0", CultureInfo.GetCultureInfo("fr-FR")) + " secondes"
                 : seconds.ToString("0.0", CultureInfo.InvariantCulture) + " seconds";
+        }
+
+        /// <summary>Écart cumulé au meilleur tour à la fin d'un secteur : « Secteur 2 : trois dixièmes d'avance. »</summary>
+        internal static string SpokenSplit(int sector, double delta, bool fr)
+        {
+            double a = Math.Abs(delta);
+            if (a < 0.05) return fr ? $"Secteur {sector} : même temps." : $"Sector {sector}: same time.";
+            var d = SpokenDelta(a, fr);
+            return fr ? $"Secteur {sector} : {d} " + (delta < 0 ? "d'avance." : "de retard.")
+                      : $"Sector {sector}: {d} " + (delta < 0 ? "up." : "down.");
         }
 
         private static string SpokenGap(Opponent o, bool fr)

@@ -147,6 +147,60 @@ namespace AIRaceEngineer
     </Setter>
   </Style>
 
+  <!-- Curseur (volumes) : rail fin, partie remplie dans l'accent, pastille comme celle de l'interrupteur -->
+  <Style x:Key='Slider' TargetType='Slider'>
+    <Setter Property='Cursor' Value='Hand'/>
+    <Setter Property='VerticalAlignment' Value='Center'/>
+    <Setter Property='IsMoveToPointEnabled' Value='True'/>
+    <Setter Property='Template'>
+      <Setter.Value>
+        <ControlTemplate TargetType='Slider'>
+          <Grid Height='24' Background='Transparent'>
+            <Border Height='4' CornerRadius='2' Background='#24FFFFFF' VerticalAlignment='Center' Margin='7,0'/>
+            <Track x:Name='PART_Track'>
+              <Track.DecreaseRepeatButton>
+                <RepeatButton Command='{x:Static Slider.DecreaseLarge}' Focusable='False' IsTabStop='False'>
+                  <RepeatButton.Template>
+                    <ControlTemplate TargetType='RepeatButton'>
+                      <Grid Background='Transparent'>
+                        <Border Height='4' CornerRadius='2' Background='#64B5F6' VerticalAlignment='Center' Margin='7,0,-7,0'/>
+                      </Grid>
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
+              </Track.DecreaseRepeatButton>
+              <Track.IncreaseRepeatButton>
+                <RepeatButton Command='{x:Static Slider.IncreaseLarge}' Focusable='False' IsTabStop='False'>
+                  <RepeatButton.Template>
+                    <ControlTemplate TargetType='RepeatButton'>
+                      <Grid Background='Transparent'/>
+                    </ControlTemplate>
+                  </RepeatButton.Template>
+                </RepeatButton>
+              </Track.IncreaseRepeatButton>
+              <Track.Thumb>
+                <Thumb Width='14' Height='14'>
+                  <Thumb.Template>
+                    <ControlTemplate TargetType='Thumb'>
+                      <Ellipse x:Name='dot' Fill='#EDEDED' Stroke='#141415' StrokeThickness='1'/>
+                      <ControlTemplate.Triggers>
+                        <Trigger Property='IsMouseOver' Value='True'><Setter TargetName='dot' Property='Opacity' Value='0.85'/></Trigger>
+                        <Trigger Property='IsDragging' Value='True'><Setter TargetName='dot' Property='Fill' Value='#64B5F6'/></Trigger>
+                      </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                  </Thumb.Template>
+                </Thumb>
+              </Track.Thumb>
+            </Track>
+          </Grid>
+          <ControlTemplate.Triggers>
+            <Trigger Property='IsEnabled' Value='False'><Setter Property='Opacity' Value='0.4'/></Trigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value>
+    </Setter>
+  </Style>
+
   <!-- Segment sélectionnable (fournisseur, langue, moteur de voix) -->
   <Style x:Key='Segment' TargetType='RadioButton'>
     <Setter Property='Cursor' Value='Hand'/>

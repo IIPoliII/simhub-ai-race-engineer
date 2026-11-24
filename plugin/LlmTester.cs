@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
@@ -72,7 +73,16 @@ namespace AIRaceEngineer
                 wc.Headers[HttpRequestHeader.Authorization] = "Bearer " + apiKey;
                 try
                 {
-                    var json = wc.UploadString(baseUrl.TrimEnd('/') + "/chat/completions", body);
+                    string json;
+                    try { json = wc.UploadString(baseUrl.TrimEnd('/') + "/chat/completions", body); }
+                    catch (WebException ex) when (req.ReasoningEffort != null && ex.Response is HttpWebResponse bad && (int)bad.StatusCode == 400
+                                                  && Regex.IsMatch(ReadBody(bad), "reasoning|think", RegexOptions.IgnoreCase))
+                    {
+                        // Serveur qui ne connaît pas reasoning_effort (ou modèle sans réflexion qui le refuse) : sans, comme le client vocal
+                        request.Remove("reasoning_effort");
+                        started = DateTime.UtcNow;
+                        json = wc.UploadString(baseUrl.TrimEnd('/') + "/chat/completions", request.ToString(Formatting.None));
+                    }
                     var ms = (int)(DateTime.UtcNow - started).TotalMilliseconds;
                     var answer = ((string)JObject.Parse(json).SelectToken("choices[0].message.content") ?? "").Trim();
                     if (answer.Length == 0)
@@ -81,8 +91,11 @@ namespace AIRaceEngineer
                         bool local = info.Id == "custom";
                         string fr = local ? $" : {info.Models[0]} ou {info.Models[1]} (ollama pull {info.Models[0]})." : ".";
                         string en = local ? $": {info.Models[0]} or {info.Models[1]} (ollama pull {info.Models[0]})." : ".";
-                        Publish(false, new Msg($"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler, trop lent pour la radio. Choisis-en un plus direct" + fr,
-                                               $"{model} answers, but its reply is empty: it is a model that thinks before speaking, too slow for the radio. Pick a more direct one" + en), null);
+                        // En local, on a déjà demandé de ne pas réfléchir (reasoning_effort « none ») : ce modèle ne sait pas s'en passer
+                        string asked = local ? " et ne sait pas répondre sans réfléchir" : "";
+                        string askedEn = local ? " and can't answer without thinking" : "";
+                        Publish(false, new Msg($"{model} répond, mais sa réponse est vide : c'est un modèle qui réfléchit avant de parler{asked}, trop lent pour la radio. Choisis-en un plus direct" + fr,
+                                               $"{model} answers, but its reply is empty: it is a model that thinks before speaking{askedEn}, too slow for the radio. Pick a more direct one" + en), null);
                     }
                     else
                         Publish(true, new Msg($"Connexion OK · {model} · réponse en {ms} ms" + (answer.Length < 40 ? $" : « {answer} »" : ""),
@@ -90,9 +103,7 @@ namespace AIRaceEngineer
                 }
                 catch (WebException ex) when (ex.Response is HttpWebResponse r)
                 {
-                    string detail;
-                    using (var reader = new StreamReader(r.GetResponseStream(), Encoding.UTF8))
-                        detail = reader.ReadToEnd();
+                    string detail = ReadBody(r);
                     int code = (int)r.StatusCode;
                     var allowed = AllowedValues(detail);
                     if (allowed.Length > 0)
@@ -111,8 +122,8 @@ namespace AIRaceEngineer
                                 others);
                     }
                     else if (code == 404)
-                        Publish(false, new Msg("Adresse introuvable (404)" + (info.AccountLabel != null ? $" : vérifie le champ {info.AccountLabel}." : "."),
-                                               "Address not found (404)" + (info.AccountLabel != null ? $": check the {info.AccountLabel}." : ".")), null);
+                        Publish(false, new Msg("Adresse introuvable (404)" + (info.AccountLabel != null ? $" : vérifie le champ {info.AccountLabel}." : info.Id == "custom" ? $" : vérifie l'URL de l'API ({baseUrl})." : "."),
+                                               "Address not found (404)" + (info.AccountLabel != null ? $": check the {info.AccountLabel}." : info.Id == "custom" ? $": check the API URL ({baseUrl})." : ".")), null);
                     else if (code == 429)
                         Publish(false, new Msg("Quota dépassé (429). Réessaie plus tard ou change de fournisseur.", "Quota exceeded (429). Try again later or switch provider."), null);
                     else
@@ -123,6 +134,20 @@ namespace AIRaceEngineer
                     Publish(false, new Msg("Connexion impossible : " + ex.Message, "Cannot connect: " + ex.Message), null);
                 }
             }
+        }
+
+        // Corps de la dernière réponse d'erreur : le flux ne se lit qu'une fois, et un test ne tourne qu'à la fois (Busy)
+        private HttpWebResponse _bodyOf;
+        private string _body;
+
+        private string ReadBody(HttpWebResponse r)
+        {
+            if (ReferenceEquals(r, _bodyOf)) return _body;
+            string body;
+            try { using (var reader = new StreamReader(r.GetResponseStream(), Encoding.UTF8)) body = reader.ReadToEnd(); }
+            catch (Exception) { body = ""; }
+            _bodyOf = r;
+            return _body = body;
         }
 
         /// <summary>Listes de valeurs autorisées dans une erreur de validation (ex. Infomaniak : "values": [...]).</summary>

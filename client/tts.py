@@ -30,6 +30,9 @@ ONLINE_RETRY_S = 60
 lang = "fr"
 # Nombres à la suisse (septante, huitante, nonante) quand l'ingé parle français, choisi par engineer.py
 swiss = False
+# Volumes réglés dans la page (1 = 100 %), choisis par engineer.py : changer un volume ne recharge pas la voix
+voice_volume = 1.0
+noise_volume = 1.0
 
 
 def _t(fr: str, en: str) -> str:
@@ -418,8 +421,8 @@ class Voice:
         online = not isinstance(self.engine, KokoroVoice) and self.warning is None
         self.last_detail = f"{_t('en ligne', 'online') if online else _t('locale', 'local')} {time.perf_counter() - t:.2f}s"
         if self.radio:
-            samples = audio.radio_fx(samples, rate, track=self.track)
-        return samples, rate
+            samples = audio.radio_fx(samples, rate, track=self.track, noise=noise_volume)
+        return audio.gain(samples, voice_volume), rate
 
     def say(self, text: str):
         samples, rate = self.render(text)

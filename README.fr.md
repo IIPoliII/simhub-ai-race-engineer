@@ -95,15 +95,22 @@ d'ElevenLabs ouvre un guide pas à pas : où créer le compte, quoi copier, comb
   Rien n'est enregistré : chaque voiture est synthétisée à chaque message (régime, passages de rapport, distance,
   effet Doppler), donc jamais deux fois le même son, et parfois aucun. Le fond baisse quand l'ingé parle pour que
   sa voix reste parfaitement lisible.
+- **Volumes** : deux curseurs, un pour la voix de l'ingé (50 à 200 %, les crêtes sont arrondies au-delà de 100 %
+  pour ne pas saturer) et un pour les bruits de piste (0 à 200 %). Double-clic : retour à 100 %.
 - **Intelligence artificielle** : Infomaniak, Cloudflare, OpenAI, Claude, ou n'importe quelle API compatible
   OpenAI (Ollama...). Une fois la clé collée, la liste « Modèle » se remplit avec les modèles disponibles chez
   le fournisseur, les conseillés en tête. Le bouton **Tester la connexion** vérifie la clé et le modèle. Si l'API
   refuse le modèle, la page propose ceux qu'elle accepte en un clic.
+  - Autre (Ollama, LM Studio) : l'URL du serveur, `/v1` est ajouté s'il manque. Les modèles qui réfléchissent
+    (Qwen3...) sont mis en réponse directe (`reasoning_effort: none`) ; un serveur qui ne connaît pas ce réglage
+    est réinterrogé sans.
   - Infomaniak : un token avec le scope `ai-tools` et le Product ID (Manager → AI Tools). Modèle par défaut : `mistralai/Ministral-3-14B-Instruct-2512`.
     Le plugin utilise l'API v2 d'Infomaniak, qui donne accès à tout leur catalogue (Mistral Small 4, Gemma 4...).
   - Cloudflare : un token API Workers AI et ton Account ID.
-- **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, écarts devant/derrière (en course),
-  places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce montre un exemple de phrase.
+- **Annonces automatiques** : temps au tour comparé au précédent, meilleur tour, tour invalidé (dès que le jeu
+  l'invalide, puis rappelé avec le temps), écart au meilleur tour à chaque secteur (hors course), écarts
+  devant/derrière (en course), places gagnées ou perdues, alerte carburant (à 2, 3, 4 ou 5 tours). Chaque annonce
+  montre un exemple de phrase.
 - **Push-to-talk** : dans **Controls and events**, ajoute un mapping avec l'action
   `AIRaceEnginePlugin.PushToTalk` et appuie sur le bouton de ton volant. La page du plugin montre en direct
   si le bouton est détecté.
@@ -172,7 +179,7 @@ pneus tu veux. Réponds comme tu veux (« des mediums neufs, le plein, on répar
 ```
 plugin/                 Plugin SimHub (C#, .NET Framework 4.8)
   AIRaceEnginePlugin.cs   télémétrie JSON, file d'annonces, push-to-talk
-  Callouts.cs             annonces automatiques (tour, écarts, positions, carburant)
+  Callouts.cs             annonces automatiques (tour, secteurs, écarts, positions, carburant)
   Settings.cs             réglages, fournisseurs d'IA, voix, config envoyée au client
   SettingsControl.cs      page du plugin dans SimHub
   Theme.cs                thème de la page (couleurs, boutons, interrupteurs, segments)

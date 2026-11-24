@@ -98,7 +98,9 @@ namespace AIRaceEngineer
                     "Dans un terminal, télécharge un modèle : `ollama pull qwen3:4b-instruct`.",
                     "Laisse l'URL `http://localhost:11434/v1`, sans clé, mets le même nom de modèle (`qwen3:4b-instruct`) et clique « Tester la connexion ».",
                 },
-                Note = "LM Studio marche aussi : démarre son serveur local et mets l'URL `http://localhost:1234/v1`.",
+                Note = "LM Studio marche aussi : démarre son serveur local et mets l'URL `http://localhost:1234/v1`. " +
+                       "Ollama sur un autre PC : mets son adresse, par exemple `http://192.168.1.20:11434` (le `/v1` est ajouté s'il manque). " +
+                       "Les modèles qui réfléchissent avant de répondre (Qwen3...) sont mis en réponse directe quand ils le permettent.",
             },
             ["elevenlabs"] = new Guide
             {
@@ -193,7 +195,9 @@ namespace AIRaceEngineer
                     "In a terminal, download a model: `ollama pull qwen3:4b-instruct`.",
                     "Leave the URL `http://localhost:11434/v1`, no key, enter the same model name (`qwen3:4b-instruct`) and click « Test connection ».",
                 },
-                Note = "LM Studio works too: start its local server and use the URL `http://localhost:1234/v1`.",
+                Note = "LM Studio works too: start its local server and use the URL `http://localhost:1234/v1`. " +
+                       "Ollama on another PC: enter its address, for example `http://192.168.1.20:11434` (`/v1` is added if missing). " +
+                       "Models that think before answering (Qwen3...) are switched to direct answers when they allow it.",
             },
             ["elevenlabs"] = new Guide
             {

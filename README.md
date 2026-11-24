@@ -94,15 +94,22 @@ ElevenLabs opens a step-by-step guide: where to sign up, what to copy, what it c
   Nothing is recorded: each car is synthesized for each message (revs, gear shifts, distance, Doppler effect),
   so it never sounds the same twice, and sometimes there is none. The background ducks when the engineer
   speaks so the voice stays perfectly clear.
+- **Volumes**: two sliders, one for the engineer's voice (50 to 200%, peaks are rounded off above 100% so it
+  doesn't distort) and one for the track noise (0 to 200%). Double-click: back to 100%.
 - **Artificial intelligence**: Infomaniak, Cloudflare, OpenAI, Claude, or any OpenAI-compatible API (Ollama...).
   Once the key is pasted, the "Model" list fills with the provider's models, recommended ones first.
   The **Test connection** button checks the key and the model. If the API rejects the model,
   the page offers the ones it accepts in one click.
+  - Other (Ollama, LM Studio): the server URL, `/v1` is added if missing. Models that think (Qwen3...) are
+    switched to direct answers (`reasoning_effort: none`); a server that doesn't know this setting is asked again
+    without it.
   - Infomaniak: a token with the `ai-tools` scope and the Product ID (Manager → AI Tools). Default model: `mistralai/Ministral-3-14B-Instruct-2512`.
     The plugin uses Infomaniak's v2 API, which gives access to their whole catalogue (Mistral Small 4, Gemma 4...).
   - Cloudflare: a Workers AI API token and your Account ID.
-- **Automatic callouts**: lap time compared to the previous one, personal best, gaps ahead/behind (in races),
-  places gained or lost, fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a sample sentence.
+- **Automatic callouts**: lap time compared to the previous one, personal best, lap invalidated (as soon as the
+  game invalidates it, then again with the time), gap to your best lap at each sector (outside races), gaps
+  ahead/behind (in races), places gained or lost, fuel warning (at 2, 3, 4 or 5 laps). Each callout shows a
+  sample sentence.
 - **Push-to-talk**: in **Controls and events**, add a mapping with the action
   `AIRaceEnginePlugin.PushToTalk` and press the button on your wheel. The plugin page shows live
   whether the button is detected.
@@ -170,7 +177,7 @@ It works with every game, but the engineer doesn't set anything in the game: you
 ```
 plugin/                 SimHub plugin (C#, .NET Framework 4.8)
   AIRaceEnginePlugin.cs   JSON telemetry, callout queue, push-to-talk
-  Callouts.cs             automatic callouts (lap, gaps, positions, fuel)
+  Callouts.cs             automatic callouts (lap, sectors, gaps, positions, fuel)
   Settings.cs             settings, AI providers, voices, config sent to the client
   SettingsControl.cs      the plugin page in SimHub
   Theme.cs                page theme (colours, buttons, toggles, segments)

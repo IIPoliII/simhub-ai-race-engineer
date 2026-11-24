@@ -97,6 +97,9 @@ namespace AIRaceEngineer
         private int _lastCompletedLaps = -1;
         private double _fuelAtLapStart = double.NaN;
         private bool _lapInPit, _lapValid = true;   // tour en cours : passage au stand, tour invalidé
+        private bool _gameLapValid;                  // IsLapValid à l'image d'avant : on annonce le passage de valide à invalidé
+        private bool _lapFromStart;                  // tour en cours suivi depuis la ligne (pas pris en route au lancement)
+        private int _sector;                         // CurrentSectorIndex à l'image d'avant (0 : le jeu ne le donne pas)
         private static readonly TimeSpan LapStartWindow = TimeSpan.FromSeconds(1);
         private (DateTime At, int Lap, double? FuelUsed, bool Pit)? _pendingLapRecord;
         private Guid _sessionId;
@@ -518,7 +521,19 @@ namespace AIRaceEngineer
             {
                 // Tour en cours, à chaque image (sans allocation) : un passage au stand ou une invalidation compte pour tout le tour
                 if (d.IsInPitLane == 1) _lapInPit = true;
+                // Annoncé seulement quand le jeu passe de valide à invalidé : un jeu qui ne gère pas la validité
+                // (toujours invalide, ou toujours valide) ne dit rien. Une fois par tour, jamais dans les stands.
+                if (!d.IsLapValid && _gameLapValid && _lapValid && !_lapInPit) _callouts.OnLapInvalidated();
+                _gameLapValid = d.IsLapValid;
                 if (!d.IsLapValid) _lapValid = false;
+                // Secteur suivant dans le même tour : écart au meilleur tour (la fin du dernier secteur, c'est la fin du tour)
+                int sector = d.CurrentSectorIndex;
+                if (sector != _sector)
+                {
+                    if (_sector >= 1 && sector == _sector + 1)
+                        _callouts.OnSector(_sector, d.CurrentLapTime, _lapValid && !_lapInPit && _lapFromStart, Callouts.IsRace(d.SessionTypeName));
+                    _sector = sector;
+                }
                 return;
             }
 
@@ -529,13 +544,17 @@ namespace AIRaceEngineer
                 double used = _fuelAtLapStart - d.Fuel;
                 double? fuelUsed = _lapInPit || double.IsNaN(used) || used <= 0 ? (double?)null : R(used, 2);
                 _pendingLapRecord = (DateTime.UtcNow + LapRecordDelay, d.CompletedLaps, fuelUsed, _lapInPit);
-                _callouts.OnLapCompleted(_lapValid);
+                _callouts.OnLapCompleted(_lapValid, _lapFromStart);
             }
             // Carburant au départ du tour : seulement au début d'un tour (pas en plein tour au lancement, ni après un retour en arrière)
-            _fuelAtLapStart = lapDone || (_lastCompletedLaps < 0 && d.CurrentLapTime < LapStartWindow) ? d.Fuel : double.NaN;
+            // Même règle pour les secteurs : seul un tour suivi depuis la ligne peut servir de référence
+            _lapFromStart = lapDone || (_lastCompletedLaps < 0 && d.CurrentLapTime < LapStartWindow);
+            _fuelAtLapStart = _lapFromStart ? d.Fuel : double.NaN;
             _lastCompletedLaps = d.CompletedLaps;
             _lapInPit = d.IsInPitLane == 1;
             _lapValid = true;
+            _gameLapValid = d.IsLapValid;
+            _sector = d.CurrentSectorIndex;
         }
 
         private object[] RecentLaps()

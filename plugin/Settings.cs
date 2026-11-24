@@ -74,9 +74,22 @@ namespace AIRaceEngineer
                 // Petits modèles qui répondent sans réfléchir (« qwen3:4b » est devenu la version thinking)
                 Models = new[] { "qwen3:4b-instruct", "llama3.2:3b", "gemma3:4b" },
                 NeedsKey = false, KeyHelp = new Msg("Souvent inutile en local.", "Usually not needed locally."),
-                BaseUrl = p => string.IsNullOrWhiteSpace(p.BaseUrl) ? "http://localhost:11434/v1" : p.BaseUrl.Trim(),
+                BaseUrl = p => string.IsNullOrWhiteSpace(p.BaseUrl) ? "http://localhost:11434/v1" : CompatibleUrl(p.BaseUrl),
             },
         };
+
+        /// <summary>
+        /// Adresse de l'API compatible OpenAI. Ollama et LM Studio la servent sous /v1 : une adresse sans chemin
+        /// (« http://10.0.0.5:11434/ ») répondait 404 partout, on y ajoute /v1. Sans http://, on le met.
+        /// </summary>
+        internal static string CompatibleUrl(string url)
+        {
+            url = (url ?? "").Trim();
+            if (url.Length == 0) return url;
+            if (url.IndexOf("://", StringComparison.Ordinal) < 0) url = "http://" + url;
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri)) return url;
+            return uri.AbsolutePath.Trim('/').Length == 0 && uri.Query.Length == 0 ? url.TrimEnd('/') + "/v1" : url;
+        }
 
         public static ProviderInfo Get(string id) => All.FirstOrDefault(p => p.Id == id) ?? All[0];
 
@@ -101,6 +114,11 @@ namespace AIRaceEngineer
                 }
                 return r;
             }
+            if (Id == "custom")
+                // Ollama : reasoning_effort « none » coupe la réflexion des modèles qui réfléchissent (Qwen3, DeepSeek...).
+                // Sans ça, la réflexion épuise max_tokens et la réponse arrive vide. Un serveur qui le refuse :
+                // le client vocal et le test le retirent et réessaient
+                return new LlmRequest { ReasoningEffort = "none" };
             return new LlmRequest();
         }
     }
@@ -196,6 +214,8 @@ namespace AIRaceEngineer
         public string ElevenLabsVoiceId { get; set; } = "JBFqnCBsd6RMkjVDRZzb";
         public bool RadioEffect { get; set; } = true;
         public bool TrackNoise { get; set; } = true;   // des F1 passent derrière l'ingé (avec l'effet radio)
+        public int VoiceVolume { get; set; } = 100;    // en %, 50 à 200 : au-delà de 100, les crêtes sont arrondies
+        public int NoiseVolume { get; set; } = 100;    // bruits de piste, en %, 0 à 200
         public string SttModel { get; set; } = "small"; // base = rapide, small = précis
 
         // Annonces automatiques
@@ -204,6 +224,8 @@ namespace AIRaceEngineer
         public bool CallGaps { get; set; } = true;
         public bool CallPosition { get; set; } = true;
         public bool CallFuel { get; set; } = true;
+        public bool CallInvalidLap { get; set; } = true;   // « Tour invalidé. » au moment où le jeu l'invalide
+        public bool CallSplits { get; set; } = true;       // écart au meilleur tour à chaque secteur, hors course
         public int FuelWarningLaps { get; set; } = 3;
 
         public bool AutoStartClient { get; set; } = true;
@@ -374,6 +396,9 @@ namespace AIRaceEngineer
                 cf.Model = ProviderInfo.Get("cloudflare").DefaultModel;
             // 0.5.2 : en Suisse, la voix française par défaut devient Ariane (fr-CH), une seule fois
             if (SettingsVersion < 4 && SwissRegion() && NeuralVoiceFr == "fr-FR-HenriNeural") NeuralVoiceFr = "fr-CH-ArianeNeural";
+            // Fichier modifié à la main : volumes gardés dans les bornes des curseurs
+            VoiceVolume = Math.Max(50, Math.Min(200, VoiceVolume));
+            NoiseVolume = Math.Max(0, Math.Min(200, NoiseVolume));
             SettingsVersion = CurrentVersion;
         }
 
@@ -438,6 +463,8 @@ namespace AIRaceEngineer
                     model = "eleven_flash_v2_5",
                 },
                 stt = new { model = SttModel, device = "cpu", compute_type = "int8" },
+                // À part de tts : changer un volume ne recharge pas la voix
+                audio = new { voice_volume = VoiceVolume / 100.0, noise_volume = NoiseVolume / 100.0 },
             };
         }
     }

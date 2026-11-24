@@ -9,6 +9,7 @@ Le push-to-talk est l'action « PushToTalk » à associer à un bouton dans Cont
     uv run engineer.py --ask "écart devant ?" --snapshot sample_snapshot.json
 """
 import argparse
+import faulthandler
 import json
 import os
 import queue
@@ -16,6 +17,7 @@ import subprocess
 import sys
 import threading
 import time
+import traceback
 from pathlib import Path
 
 import httpx
@@ -27,6 +29,9 @@ POLL_S = 0.03
 MIN_RECORDING_S = 0.3
 MAX_EVENT_AGE_MS = 15000
 PLUGIN_TIMEOUT_S = 20   # lancé par SimHub : on s'arrête si SimHub ne répond plus
+# SimHub encore là mais muet (gros chargement, plugin désactivé) : on attend bien plus longtemps avant de s'arrêter.
+# Avant, 20 s sans réponse arrêtaient le client, relancé ensuite par le plugin avec son « Radio check »
+SIMHUB_SILENT_S = 300
 RETRY_S = 60            # réglages qui n'ont pas pu se charger : nouvel essai
 
 GREETING = {"fr": "Radio check, je t'entends.", "en": "Radio check, loud and clear."}
@@ -134,6 +139,38 @@ class Plugin:
             pass
 
 
+def process_alive(pid: int) -> bool:
+    """Le processus pid tourne-t-il encore ? (Windows ; ailleurs, on le croit vivant)"""
+    if sys.platform != "win32":
+        return True
+    import ctypes
+    from ctypes import wintypes
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
+    kernel32.WaitForSingleObject.argtypes = [wintypes.HANDLE, wintypes.DWORD]
+    kernel32.CloseHandle.argtypes = [wintypes.HANDLE]
+    SYNCHRONIZE, WAIT_TIMEOUT = 0x00100000, 0x102
+    handle = kernel32.OpenProcess(SYNCHRONIZE, False, pid)
+    if not handle:
+        return False  # plus de processus avec ce numéro
+    try:
+        return kernel32.WaitForSingleObject(handle, 0) == WAIT_TIMEOUT
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def simhub_gone(managed: bool, silent_s: float) -> bool:
+    """Lancé par SimHub, qui ne répond plus depuis silent_s secondes : faut-il s'arrêter ?"""
+    if not managed:
+        return False
+    try:
+        pid = int(os.environ.get("AIR_SIMHUB_PID", ""))
+    except ValueError:
+        return silent_s > PLUGIN_TIMEOUT_S  # plugin d'avant la 0.6.0 : comme avant
+    return not process_alive(pid) or silent_s > SIMHUB_SILENT_S
+
+
 def timed(fn, *args):
     t = time.perf_counter()
     result = fn(*args)
@@ -169,6 +206,9 @@ class Engine:
         tts.progress = self.plugin.status
         set_language(cfg.get("language", "fr"))
         tts.swiss = bool(cfg.get("swiss_numbers"))
+        levels = cfg.get("audio") or {}  # absent avec un plugin d'avant la 0.6.0
+        tts.voice_volume = min(2.0, max(0.5, float(levels.get("voice_volume", 1.0))))
+        tts.noise_volume = min(2.0, max(0.0, float(levels.get("noise_volume", 1.0))))
 
         def changed(*keys):
             return any(self.cfg.get(k) != cfg.get(k) for k in keys)
@@ -322,11 +362,16 @@ def run(plugin: Plugin, managed: bool):
                 elif kind == "audio":
                     engine.answer_audio(payload)
             except Exception as e:
+                log(traceback.format_exc().rstrip())  # dans client.log, pour savoir d'où ça vient
                 plugin.status(t(f"Erreur : {e}", f"Error: {e}"), "error")
 
     threading.Thread(target=worker, daemon=True).start()
     jobs.put(("config", cfg, None))
-    jobs.put(("say", GREETING.get(cfg.get("language"), GREETING["en"]), None))
+    # Relancé par le plugin après un arrêt imprévu : pas de « Radio check » en pleine course
+    if os.environ.get("AIR_QUIET_START") != "1":
+        jobs.put(("say", GREETING.get(cfg.get("language"), GREETING["en"]), None))
+    else:
+        log(t("Relancé après un arrêt : pas de radio check.", "Restarted after a stop: no radio check."))
 
     recorder = audio.Recorder()
     rev = cfg["rev"]
@@ -349,59 +394,65 @@ def run(plugin: Plugin, managed: bool):
                 log(t("SimHub a redémarré avec un nouveau jeton : arrêt de ce client.",
                       "SimHub restarted with a new token: this client is exiting."))
                 return
-            if managed and time.time() - last_ok > PLUGIN_TIMEOUT_S:
+            if simhub_gone(managed, time.time() - last_ok):
                 log(t("SimHub ne répond plus, arrêt.", "SimHub stopped responding, exiting."))
                 return
             time.sleep(0.5)
             continue
 
-        if last_id is None:
-            last_id = p["last_id"]  # on ignore les annonces d'avant le démarrage
+        try:
+            if last_id is None:
+                last_id = p["last_id"]  # on ignore les annonces d'avant le démarrage
 
-        if p["rev"] != rev:
-            try:
-                cfg = plugin.config()
-                rev = cfg["rev"]
+            if p["rev"] != rev:
+                try:
+                    cfg = plugin.config()
+                    rev = cfg["rev"]
+                    jobs.put(("config", cfg, None))
+                except httpx.HTTPError:
+                    pass
+            elif engine.broken and time.monotonic() >= retry_at:
+                retry_at = time.monotonic() + RETRY_S
                 jobs.put(("config", cfg, None))
-            except httpx.HTTPError:
-                pass
-        elif engine.broken and time.monotonic() >= retry_at:
-            retry_at = time.monotonic() + RETRY_S
-            jobs.put(("config", cfg, None))
 
-        for event in p["events"]:
-            last_id = max(last_id, event["id"])
-            age_ms = event.get("age_ms", 0)
-            if age_ms < MAX_EVENT_AGE_MS:
-                jobs.put(("say", event["text"], time.monotonic() - age_ms / 1000))
+            for event in p["events"]:
+                last_id = max(last_id, event["id"])
+                age_ms = event.get("age_ms", 0)
+                if age_ms < MAX_EVENT_AGE_MS:
+                    jobs.put(("say", event["text"], time.monotonic() - age_ms / 1000))
 
-        # Après « box box » : rappel du programme à l'entrée des stands (seulement pendant un arrêt prévu)
-        plan = engine.pit
-        if plan is not None:
-            text, done = plan.watch(plugin.snapshot())
-            if text:
-                jobs.put(("say", text, time.monotonic()))
-            if done and engine.pit is plan:
-                engine.pit = None
+            # Après « box box » : rappel du programme à l'entrée des stands (seulement pendant un arrêt prévu)
+            plan = engine.pit
+            if plan is not None:
+                text, done = plan.watch(plugin.snapshot())
+                if text:
+                    jobs.put(("say", text, time.monotonic()))
+                if done and engine.pit is plan:
+                    engine.pit = None
 
-        down = ptt_seen = p["ptt"]
-        if down and not recording:
-            audio.stop()          # coupe l'ingé s'il parlait encore
-            audio.beep(1400)
-            try:
-                recorder.start()
-                recording, started = True, time.time()
-                engine.mic_issue = None  # la page se met à jour au prochain état du fil de travail (pas d'ici : il peut parler)
-            except Exception as e:
-                # Gardé jusqu'au prochain essai réussi : la prochaine annonce n'efface pas le problème
-                engine.mic_issue = (f"Micro : {e}", f"Microphone: {e}", "error")
-                plugin.status(t(f"Micro : {e}", f"Microphone: {e}"), "error")
-        elif not down and recording:
-            samples = recorder.stop()
-            recording = False
-            audio.beep(900)
-            if time.time() - started >= MIN_RECORDING_S:
-                jobs.put(("audio", samples, None))
+            down = ptt_seen = p["ptt"]
+            if down and not recording:
+                audio.stop()          # coupe l'ingé s'il parlait encore
+                audio.beep(1400)
+                try:
+                    recorder.start()
+                    recording, started = True, time.time()
+                    engine.mic_issue = None  # la page se met à jour au prochain état du fil de travail (pas d'ici : il peut parler)
+                except Exception as e:
+                    # Gardé jusqu'au prochain essai réussi : la prochaine annonce n'efface pas le problème
+                    engine.mic_issue = (f"Micro : {e}", f"Microphone: {e}", "error")
+                    plugin.status(t(f"Micro : {e}", f"Microphone: {e}"), "error")
+            elif not down and recording:
+                samples = recorder.stop()
+                recording = False
+                audio.beep(900)
+                if time.time() - started >= MIN_RECORDING_S:
+                    jobs.put(("audio", samples, None))
+        except Exception:
+            # Un souci ponctuel (réponse inattendue, carte son) ne doit pas couper la radio : on le note et on continue
+            log(traceback.format_exc().rstrip())
+            time.sleep(0.5)
+            continue
 
         if not p.get("wait"):
             time.sleep(POLL_S)  # plugin d'avant l'attente longue : il répond tout de suite
@@ -485,6 +536,9 @@ def main():
         return
 
     if args.managed:
+        # Plantage hors Python (voix, carte son...) : la pile de chaque fil part dans client.log, qui la garde
+        # quand le plugin relance le client
+        faulthandler.enable()
         LEGACY_PLUGIN = "AIR_LANG" not in os.environ
         set_language(LANG)
         lower_priority()

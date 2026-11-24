@@ -28,8 +28,14 @@ namespace AIRaceEngineer
         private DateTime _startedAt;
         private string _lastLine;
 
-        private Msg _lastError, _setupStep;
+        private Msg _lastError, _setupStep, _lastCrash;
         public string LastError => _lastError;
+        /// <summary>Le client s'est arrêté tout seul puis a été relancé : pourquoi (gardé jusqu'à un Redémarrer), sinon null.</summary>
+        public string LastCrash => _lastCrash;
+        // Arrêt imprévu du client : la relance se fait sans « Radio check » (en pleine course, on croyait à un message)
+        // et le journal garde la sortie d'avant, pour voir ce qui l'a arrêté
+        private bool _crashed;
+        private const long MaxAppendedLog = 2 * 1024 * 1024;
         /// <summary>Étape de la première mise en route en cours, sinon null.</summary>
         public string SetupStep => _setupStep;
         /// <summary>Dernière ligne de la mise en route (ex. « Téléchargement de la voix : 40 % »).</summary>
@@ -75,7 +81,7 @@ namespace AIRaceEngineer
             lock (_sync)
             {
                 if (Running) return;
-                if (manual) QuickExits = 0;
+                if (manual) { QuickExits = 0; _crashed = false; _lastCrash = null; }
 
                 if (!Installed)
                 {
@@ -116,9 +122,12 @@ namespace AIRaceEngineer
                     _log?.Dispose();
                     // Après une étape de mise en route, on garde sa sortie dans le même journal
                     // Partagé : SimHub peut recharger le plugin (nouvelle instance) avant d'avoir arrêté l'ancienne
-                    var stream = new FileStream(LogPath, _appendLog ? FileMode.Append : FileMode.Create, FileAccess.Write,
+                    bool quiet = _crashed && _phase == Phase.Client;
+                    bool append = _appendLog || (quiet && File.Exists(LogPath) && new FileInfo(LogPath).Length < MaxAppendedLog);
+                    var stream = new FileStream(LogPath, append ? FileMode.Append : FileMode.Create, FileAccess.Write,
                         FileShare.ReadWrite | FileShare.Delete);
                     _log = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true };
+                    if (quiet) _log.WriteLine($"--- {DateTime.Now:HH:mm:ss} relancé après un arrêt : {_lastCrash?.FrText} ---");
                     _appendLog = false;
                     _lastLine = null;
 
@@ -133,6 +142,10 @@ namespace AIRaceEngineer
                     psi.EnvironmentVariables["PYTHONUNBUFFERED"] = "1";
                     // Langue des messages de la mise en route (ensuite, le client suit la langue des réglages)
                     psi.EnvironmentVariables["AIR_LANG"] = L10n.Language;
+                    // Le client reste tant que SimHub tourne, même s'il ne répond plus un moment (au lieu de 20 s)
+                    using (var me = Process.GetCurrentProcess()) psi.EnvironmentVariables["AIR_SIMHUB_PID"] = me.Id.ToString();
+                    if (quiet) psi.EnvironmentVariables["AIR_QUIET_START"] = "1";
+                    else psi.EnvironmentVariables.Remove("AIR_QUIET_START");
                     // Le .venv reste dans le dossier du client : c'est là que PreparedMarker le cherche
                     psi.EnvironmentVariables.Remove("UV_PROJECT_ENVIRONMENT");
 
@@ -195,8 +208,12 @@ namespace AIRaceEngineer
                     return;
                 }
                 QuickExits = DateTime.UtcNow - _startedAt < QuickExit ? QuickExits + 1 : 0;
-                Fail(new Msg($"Le client vocal s'est arrêté (code {code})" + (_lastLine != null ? " : " + _lastLine : "."),
-                             $"The voice client stopped (code {code})" + (_lastLine != null ? ": " + _lastLine : ".")));
+                var stopped = new Msg($"Le client vocal s'est arrêté (code {code})" + (_lastLine != null ? " : " + _lastLine : "."),
+                                      $"The voice client stopped (code {code})" + (_lastLine != null ? ": " + _lastLine : "."));
+                Fail(stopped);
+                _crashed = true;
+                _lastCrash = new Msg($"Relancé à {DateTime.Now:HH:mm} après un arrêt (code {code})" + (_lastLine != null ? " : " + _lastLine : ". Voir le journal."),
+                                     $"Restarted at {DateTime.Now:HH:mm} after a stop (code {code})" + (_lastLine != null ? ": " + _lastLine : ". See the log."));
             }
         }
 

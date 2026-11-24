@@ -172,14 +172,20 @@ class Engineer:
         messages.append({"role": "user", "content": f"<telemetrie>{telemetry}</telemetrie>\n{stop}\nPILOTE : {question}"})
         extra_tokens = 80 if pit else 0  # place pour la ligne PLAN
 
-        try:
-            resp = self._create(messages, extra_tokens)
-        except BadRequestError as e:
-            # Modèle qui refuse la température (modèles qui raisonnent) : on la retire, pour la suite aussi
-            if self.temperature is None or "temperature" not in str(e).lower():
-                raise
-            self.temperature = None
-            resp = self._create(messages, extra_tokens)
+        while True:  # chaque nouvel essai retire un paramètre : deux au plus
+            try:
+                resp = self._create(messages, extra_tokens)
+                break
+            except BadRequestError as e:
+                # Paramètre refusé : on le retire, pour la suite aussi. La température (modèles qui raisonnent), ou
+                # reasoning_effort (serveur compatible qui ne le connaît pas, modèle Ollama sans réflexion)
+                text = str(e).lower()
+                if self.temperature is not None and "temperature" in text:
+                    self.temperature = None
+                elif self.reasoning_effort and ("reasoning" in text or "think" in text):
+                    self.reasoning_effort = None
+                else:
+                    raise
         answer = strip_thinking((resp.choices[0].message.content or "").strip())
         if pit:
             answer = pit.absorb(answer, question) or pit.summary()  # ligne PLAN seule : on récapitule le programme

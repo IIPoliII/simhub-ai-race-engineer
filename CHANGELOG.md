@@ -5,6 +5,30 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.6.0] - 2026-11-24
+
+### Added
+- Voice volume and track noise volume: two sliders in "Language and voice". The voice goes up to 200% without
+  distorting (peaks are rounded off), the background from 0 to 200%. Double-click: back to 100%. Changing a volume
+  doesn't reload the voice.
+- "Lap invalidated." callout as soon as the game invalidates your lap (track limits, cut...), and the lap time
+  says so too: "Lap time 1 47 3, invalid."
+- Sector splits outside races (practice, qualifying, hotlap): at the end of each sector, the engineer tells you how
+  far up or down you are on your best lap, for example "Sector 2: three tenths up." Nothing in races, nor for a lap
+  already invalidated or started from the pits.
+
+### Fixed
+- "Other" AI (Ollama, LM Studio): a URL without `/v1` (`http://10.0.0.5:11434/`) answered "Address not found (404)"
+  and the model list stayed empty. `/v1` is now added when missing.
+- "Other" AI: models that think before answering (Qwen3...) gave empty answers, their thinking using up all the
+  room. The engineer now asks them to answer directly; a server that doesn't know this setting is asked again
+  without it.
+- After the voice client stopped unexpectedly, its automatic restart no longer says "Radio check, loud and clear"
+  mid-race (instead of the lap time). The page shows in orange that it was restarted and why, and the log keeps
+  what happened before the stop.
+- The voice client no longer exits when SimHub takes more than 20 seconds to answer: it waits as long as SimHub is
+  running. A one-off problem in its loop is written to the log instead of stopping it.
+
 ## [0.5.5] - 2026-11-23
 
 ### Fixed

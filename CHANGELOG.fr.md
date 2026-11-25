@@ -5,6 +5,21 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Ajouté
+- Réglages à la voix (nouvelle carte, coupée par défaut) : « mets le frein à 56 », « brake balance 60 avant 40
+  arrière », « ABS 3 », « un cran de TC en moins ». L'ingé appuie pour toi sur les touches du jeu et relit la valeur
+  dans la télémétrie après chaque appui, jusqu'à la valeur demandée. Marche avec les jeux qui ont ces touches et
+  donnent la valeur à SimHub (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Les touches s'enregistrent en
+  appuyant dessus dans la page du plugin ; le jeu doit être au premier plan.
+- « Essence pour dix tours » : l'ingé calcule ce qu'il faut rajouter avec la consommation des derniers tours.
+- « Je rentre dans deux tours » : le programme d'arrêt attend le bon tour.
+- iRacing : pendant « box box », l'essence, les pneus et la réparation rapide vont directement dans le menu des
+  stands. Les autres jeux n'ont pas de moyen sûr de remplir ce menu : l'ingé dit quoi régler.
+- Conseils de réglage : « je sous-vire, tu proposes quoi ? » donne une ou deux pistes, d'abord en roulant (frein,
+  ABS, TC), puis au garage.
+
 ## [0.6.2] - 2026-11-25
 
 ### Corrigé

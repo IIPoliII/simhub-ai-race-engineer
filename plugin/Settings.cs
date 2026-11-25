@@ -228,6 +228,16 @@ namespace AIRaceEngineer
         public bool CallSplits { get; set; } = true;       // écart au meilleur tour à chaque secteur, hors course
         public int FuelWarningLaps { get; set; } = 3;
 
+        // Réglages dans le jeu à la voix : coupé tant que le pilote ne l'a pas activé (des touches sont envoyées au jeu)
+        public bool GameControl { get; set; }
+        // Touches associées dans le jeu (noms WPF, « Ctrl+F5 »), vides = pas associées
+        public string KeyBrakeBiasFront { get; set; } = "";
+        public string KeyBrakeBiasRear { get; set; } = "";
+        public string KeyAbsUp { get; set; } = "";
+        public string KeyAbsDown { get; set; } = "";
+        public string KeyTcUp { get; set; } = "";
+        public string KeyTcDown { get; set; } = "";
+
         public bool AutoStartClient { get; set; } = true;
         public bool PttTested { get; set; }
         /// <summary>Un appui ouvre la radio, l'appui suivant envoie (au lieu de maintenir le bouton).</summary>
@@ -437,6 +447,7 @@ namespace AIRaceEngineer
                 rev,
                 language = Language,
                 swiss_numbers = SwissNumbers && Language == "fr",
+                game_control = GameControl,
                 llm = new
                 {
                     provider = info.Id,

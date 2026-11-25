@@ -5,6 +5,21 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Voice adjustments (new card, off by default): "brake bias 56", "brake balance 60 front 40 rear", "ABS 3", "one
+  click less TC". The engineer presses the game keys for you and reads the value back from the telemetry after each
+  press, until it reaches the value asked for. Works with games that have these keys and give the value to SimHub
+  (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Keys are recorded by pressing them in the plugin page; the game
+  must be in front.
+- "Fuel for ten laps": the engineer works out how much to add from the last laps' consumption.
+- "Boxing in two laps": the pit plan waits for the right lap.
+- iRacing: during "box box", fuel, tyres and fast repair go straight into the pit menu. Other games have no reliable
+  way to fill that menu: the engineer tells you what to set.
+- Setup advice: "I've got understeer, what do you suggest?" gives one or two ideas, first while driving (brake bias,
+  ABS, TC), then in the garage.
+
 ## [0.6.2] - 2026-11-25
 
 ### Fixed

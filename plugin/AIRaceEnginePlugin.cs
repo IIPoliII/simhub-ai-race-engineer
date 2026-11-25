@@ -83,6 +83,17 @@ namespace AIRaceEngineer
         private static readonly object _configLock = new object();
         private static int _configRev;
         private static string _configJson = "{}";
+        // Réglages publiés en dernier, lus par /control et /pit (servis par l'instance qui tient le port)
+        private static volatile EngineerSettings _published;
+
+        // Réglages du cockpit relus à chaque image : /control appuie sur une touche puis attend que la valeur bouge
+        private sealed class LiveCar
+        {
+            public string Game, FuelUnit;
+            public double? BrakeBias, Abs, Tc;
+        }
+        private static volatile LiveCar _live;
+        private static readonly object _controlLock = new object();   // une commande à la fois
 
         // Télémétrie
         private DateTime _lastSnapshot = DateTime.MinValue;
@@ -338,6 +349,7 @@ namespace AIRaceEngineer
             {
                 _configRev++;
                 _configJson = JsonConvert.SerializeObject(Settings.ToClientConfig(_configRev));
+                _published = Settings;
             }
             Signal();
         }
@@ -463,6 +475,12 @@ namespace AIRaceEngineer
                         _clientState = query.TryGetValue("c", out var c) ? c : LegacyState(m);
                     }
                     return "{}";
+                case "/control":
+                    if (!Authorized(auth)) throw new UnauthorizedAccessException();
+                    return Control(query);
+                case "/pit":
+                    if (!Authorized(auth)) throw new UnauthorizedAccessException();
+                    return Pit(query);
                 case "/client-mic":
                     if (!Authorized(auth)) throw new UnauthorizedAccessException();
                     _pttReport = PttReport.From(_pttReport, query);
@@ -470,6 +488,84 @@ namespace AIRaceEngineer
                 default:
                     return null;
             }
+        }
+
+        // ---------- Réglages dans le jeu, à la voix ----------
+
+        private static double? Num(object v)
+        {
+            if (v == null) return null;
+            try
+            {
+                var x = Convert.ToDouble(v, System.Globalization.CultureInfo.InvariantCulture);
+                return double.IsNaN(x) || double.IsInfinity(x) ? (double?)null : x;
+            }
+            catch (Exception) { return null; }
+        }
+
+        private static double? Dbl(Dictionary<string, string> q, string key) =>
+            q.TryGetValue(key, out var v) && double.TryParse(v, System.Globalization.NumberStyles.Float,
+                System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (double?)null;
+
+        private static bool? Bool(Dictionary<string, string> q, string key) =>
+            q.TryGetValue(key, out var v) && v.Length > 0 ? v == "1" : (bool?)null;
+
+        /// <summary>
+        /// /control?k=bb|abs|tc&amp;v=cible ou &amp;s=crans : répartition de freinage, ABS ou TC réglés en appuyant sur
+        /// les touches du jeu. Répond result (done, already, limit, no_effect, no_value, no_keys, not_focused,
+        /// disabled, no_game) avec la valeur avant et après.
+        /// </summary>
+        private static string Control(Dictionary<string, string> q)
+        {
+            var live = _live;
+            var s = _published;
+            if (live == null) return JsonConvert.SerializeObject(new { result = "no_game" });
+            if (s == null || !s.GameControl) return JsonConvert.SerializeObject(new { result = "disabled", game = live.Game });
+
+            q.TryGetValue("k", out var kind);
+            Func<LiveCar, double?> pick;
+            string upKey, downKey;
+            double tolerance;
+            switch (kind)
+            {
+                case "bb": pick = l => l.BrakeBias; upKey = s.KeyBrakeBiasFront; downKey = s.KeyBrakeBiasRear; tolerance = 0.05; break;
+                case "abs": pick = l => l.Abs; upKey = s.KeyAbsUp; downKey = s.KeyAbsDown; tolerance = 0.01; break;
+                case "tc": pick = l => l.Tc; upKey = s.KeyTcUp; downKey = s.KeyTcDown; tolerance = 0.01; break;
+                default: return null;
+            }
+            var up = GameControls.Binding.Parse(upKey);
+            var down = GameControls.Binding.Parse(downKey);
+            if (up == null || down == null)
+                return JsonConvert.SerializeObject(new { result = "no_keys", game = live.Game, value = pick(live) });
+
+            var target = Dbl(q, "v");
+            int steps = Int(q, "s", 0);
+            if (target == null && steps == 0) return null;
+            GameControls.Result r;
+            lock (_controlLock)
+                r = GameControls.Adjust(() => _live is LiveCar l ? pick(l) : null, up, down, target, steps, tolerance);
+            SimHub.Logging.Current.Info($"[AI Race Engineer] réglage {kind} : {r.before} -> {r.value} ({r.result})");
+            return JsonConvert.SerializeObject(new { r.result, r.value, r.before, game = live.Game });
+        }
+
+        /// <summary>
+        /// /pit?fuel=litres&amp;tyres=0|1&amp;repair=0|1 : programme d'arrêt dans le menu des stands du jeu.
+        /// Seulement iRacing (son SDK l'accepte) ; les autres répondent « unsupported ».
+        /// </summary>
+        private static string Pit(Dictionary<string, string> q)
+        {
+            var live = _live;
+            var s = _published;
+            if (live == null) return JsonConvert.SerializeObject(new { result = "no_game" });
+            if (s == null || !s.GameControl) return JsonConvert.SerializeObject(new { result = "disabled", game = live.Game });
+            if (live.Game != GameControls.IRacing) return JsonConvert.SerializeObject(new { result = "unsupported", game = live.Game });
+
+            var fuel = Dbl(q, "fuel");
+            // Le SDK attend des litres
+            if (fuel != null && (live.FuelUnit ?? "").StartsWith("Gal", StringComparison.OrdinalIgnoreCase)) fuel *= 3.785411784;
+            GameControls.IRacingPitPlan(fuel, Bool(q, "tyres"), Bool(q, "repair"));
+            SimHub.Logging.Current.Info($"[AI Race Engineer] menu des stands iRacing : essence {fuel}, pneus {Bool(q, "tyres")}, réparation {Bool(q, "repair")}");
+            return JsonConvert.SerializeObject(new { result = "done", game = live.Game });
         }
 
         /// <summary>Client d'avant les codes d'état (0.4.8 et avant) : il n'envoie que son message, en français.</summary>
@@ -530,10 +626,19 @@ namespace AIRaceEngineer
             {
                 _snapshot = OfflineSnapshot;
                 GameName = null;
+                _live = null;
                 return;
             }
 
             var d = data.NewData;
+            _live = new LiveCar
+            {
+                Game = data.GameName,
+                FuelUnit = d.FuelUnit,
+                BrakeBias = d.BrakeBias > 0 ? d.BrakeBias : (double?)null,
+                Abs = Num(d.ABSLevel),
+                Tc = Num(d.TCLevel),
+            };
             TrackLaps(data, d);
 
             var now = DateTime.UtcNow;

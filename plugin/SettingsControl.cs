@@ -1034,7 +1034,7 @@ namespace AIRaceEngineer
             rows.Add(ToggleRow(T("Places gagnées ou perdues", "Places gained or lost"), Callouts.SpokenPosition(5, 1, fr), S.CallPosition, v => { S.CallPosition = v; Changed(); }, radio: true));
             rows.Add(Divider());
             rows.Add(ToggleRow(T("Dégâts, crevaison, roue perdue", "Damage, puncture, wheel lost"),
-                fr ? "Crevaison avant gauche ! Suspension avant gauche touchée." : "Puncture, front left! Front left suspension damaged.",
+                fr ? "La suspension avant gauche a pris un petit coup. Attention, le pneu avant droit est crevé." : "The front left suspension took a small hit. Careful, the front right tyre is down.",
                 S.CallDamage, v => { S.CallDamage = v; Changed(); }, radio: true));
             rows.Add(Divider());
             rows.Add(ToggleRow(T("Carburant", "Fuel"), fr ? "Carburant : environ 3 tours restants." : "Fuel: about 3 laps left.", S.CallFuel, v => { S.CallFuel = v; Changed(); }, radio: true));

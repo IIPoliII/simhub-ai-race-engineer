@@ -25,7 +25,7 @@ Tous les changements notables du projet sont notés ici. Le format suit
   ABS, TC), puis au garage.
 
 - Annonce automatique « Dégâts, crevaison, roue perdue » (cochée par défaut) : une phrase par choc, une fois la
-  voiture stabilisée (« Suspension avant gauche touchée. Dégâts aéro. », « Crevaison avant gauche ! »). Dans
+  voiture stabilisée (« La suspension avant gauche a pris un petit coup. », « Attention, le pneu avant droit est crevé. »), avec des tournures variées comme à la radio. Dans
   Automobilista 2 et Project CARS 2, suspension roue par roue, moteur, aéro, crevaison et roue perdue viennent du jeu ;
   ailleurs, dégâts de carrosserie et crevaison repérée par un pneu bien moins gonflé que les autres. Rien au stand,
   ni pour les dégâts déjà là au lancement.

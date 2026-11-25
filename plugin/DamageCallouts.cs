@@ -113,6 +113,7 @@ namespace AIRaceEngineer
     internal sealed class DamageCallouts
     {
         private static readonly TimeSpan Settle = TimeSpan.FromSeconds(1.5);      // le choc est fini : plus de hausse depuis 1,5 s
+        private const int MaxSentences = 2;
         private static readonly TimeSpan FlatConfirm = TimeSpan.FromSeconds(3);   // crevaison déduite des pressions : tenue 3 s
 
         private Level _body, _aero, _engine;
@@ -135,7 +136,8 @@ namespace AIRaceEngineer
         /// <returns>la phrase à dire, ou null</returns>
         public string Update(DamageState s, bool fr, DateTime now)
         {
-            var parts = new System.Collections.Generic.List<string>();
+            // (priorité, phrase) : roue perdue, crevaison, puis dégâts lourds, puis légers
+            var parts = new System.Collections.Generic.List<(int Rank, string Text)>();
             bool baseline = !_started;   // première lecture : ce qui est déjà là n'est pas une nouvelle
             _started = true;
 
@@ -143,7 +145,7 @@ namespace AIRaceEngineer
             {
                 if (s.Detached[i])
                 {
-                    if (!_detachedSaid[i] && !baseline) parts.Add(fr ? $"Roue {Corner(i, fr)} perdue !" : $"{Cap(Corner(i, fr))} wheel gone!");
+                    if (!_detachedSaid[i] && !baseline) parts.Add((0, Phrases.WheelLost(i, fr)));
                     _detachedSaid[i] = true;
                 }
                 else _detachedSaid[i] = false;
@@ -154,7 +156,7 @@ namespace AIRaceEngineer
                     bool confirmed = s.FlatFromGame || now - _flatSince[i].Value >= FlatConfirm;
                     if (confirmed && !_flatSaid[i])
                     {
-                        if (!baseline) parts.Add(fr ? $"Crevaison {Corner(i, fr)} !" : $"Puncture, {Corner(i, fr)}!");
+                        if (!baseline) parts.Add((1, Phrases.Puncture(i, fr)));
                         _flatSaid[i] = true;
                     }
                 }
@@ -164,29 +166,82 @@ namespace AIRaceEngineer
             if (s.Suspension != null)
                 for (int i = 0; i < 4; i++)
                     if (_susp[i].Step(s.Suspension[i], now, baseline) is bool heavy && !_detachedSaid[i])
-                        parts.Add(fr ? $"Suspension {Corner(i, fr)} {(heavy ? "très touchée" : "touchée")}."
-                                     : $"{Cap(Corner(i, fr))} suspension {(heavy ? "badly damaged" : "damaged")}.");
+                        parts.Add((heavy ? 2 : 3, Phrases.Suspension(i, heavy, fr)));
 
-            if (_engine.Step(s.Engine, now, baseline) is bool eh)
-                parts.Add(fr ? (eh ? "Moteur très touché." : "Moteur touché.") : (eh ? "Engine badly damaged." : "Engine damaged."));
+            if (_engine.Step(s.Engine, now, baseline) is bool eh) parts.Add((eh ? 2 : 3, Phrases.Engine(eh, fr)));
 
             // Aéro quand le jeu le donne, sinon la carrosserie générale de SimHub (les deux diraient le même choc)
             if (!double.IsNaN(s.Aero))
             {
-                if (_aero.Step(s.Aero, now, baseline) is bool ah)
-                    parts.Add(fr ? (ah ? "Gros dégâts aéro." : "Dégâts aéro.") : (ah ? "Heavy aero damage." : "Aero damage."));
+                if (_aero.Step(s.Aero, now, baseline) is bool ah) parts.Add((ah ? 2 : 3, Phrases.Aero(ah, fr)));
             }
-            else if (_body.Step(s.Body, now, baseline) is bool bh)
-                parts.Add(fr ? (bh ? "Gros dégâts sur la voiture." : "Dégâts sur la voiture.") : (bh ? "Heavy car damage." : "Car damage."));
+            else if (_body.Step(s.Body, now, baseline) is bool bh) parts.Add((bh ? 2 : 3, Phrases.Body(bh, fr)));
 
-            return parts.Count > 0 ? string.Join(" ", parts) : null;
+            // Deux phrases au plus : après un gros choc, la radio ne doit pas réciter toute la voiture
+            return parts.Count > 0 ? string.Join(" ", parts.OrderBy(p => p.Rank).Take(MaxSentences).Select(p => p.Text)) : null;
         }
 
-        internal static string Corner(int i, bool fr) => fr
-            ? new[] { "avant gauche", "avant droite", "arrière gauche", "arrière droite" }[i]
-            : new[] { "front left", "front right", "rear left", "rear right" }[i];
+        /// <summary>
+        /// Ce que dirait un ingé à la radio, pas un rapport de panne : « La suspension avant gauche a pris un petit coup »
+        /// plutôt que « Suspension avant gauche touchée ». Deux tournures par cas, tirées au hasard, pour ne pas
+        /// entendre deux fois la même phrase de suite.
+        /// </summary>
+        internal static class Phrases
+        {
+            private static readonly Random Rng = new Random();
+            private static readonly object RngLock = new object();
 
-        private static string Cap(string s) => char.ToUpperInvariant(s[0]) + s.Substring(1);
+            private static string Pick(params string[] options)
+            {
+                lock (RngLock) return options[Rng.Next(options.Length)];
+            }
+
+            // « la suspension avant droite » (féminin), « le pneu avant droit » (masculin)
+            private static string Fem(int i) => new[] { "avant gauche", "avant droite", "arrière gauche", "arrière droite" }[i];
+            private static string Masc(int i) => new[] { "avant gauche", "avant droit", "arrière gauche", "arrière droit" }[i];
+            private static string En(int i) => new[] { "front left", "front right", "rear left", "rear right" }[i];
+            private static string Cap(string s) => char.ToUpperInvariant(s[0]) + s.Substring(1);
+
+            public static string WheelLost(int i, bool fr) => fr
+                ? Pick($"On a perdu la roue {Fem(i)} !", $"La roue {Fem(i)} est partie !")
+                : Pick($"We've lost the {En(i)} wheel!", $"{Cap(En(i))} wheel's gone!");
+
+            public static string Puncture(int i, bool fr) => fr
+                ? Pick($"Crevaison, pneu {Masc(i)} !", $"Attention, le pneu {Masc(i)} est crevé.")
+                : Pick($"Puncture, {En(i)} tyre!", $"Careful, the {En(i)} tyre is down.");
+
+            public static string Suspension(int i, bool heavy, bool fr) => fr
+                ? heavy
+                    ? Pick($"La suspension {Fem(i)} a bien souffert, la voiture risque de tirer.", $"Gros coup sur la suspension {Fem(i)}, ça va tirer d'un côté.")
+                    : Pick($"La suspension {Fem(i)} a pris un petit coup.", $"Un peu de dégâts sur la suspension {Fem(i)}.")
+                : heavy
+                    ? Pick($"The {En(i)} suspension is badly hurt, the car may pull.", $"Big hit on the {En(i)} suspension, expect it to pull.")
+                    : Pick($"The {En(i)} suspension took a small hit.", $"A bit of damage on the {En(i)} suspension.");
+
+            public static string Engine(bool heavy, bool fr) => fr
+                ? heavy
+                    ? Pick("Le moteur a beaucoup souffert, ménage-le si tu peux.", "Gros dégâts moteur, vas-y doucement avec lui.")
+                    : Pick("Le moteur a pris un coup, je garde un œil dessus.", "Un peu de dégâts moteur, je surveille.")
+                : heavy
+                    ? Pick("The engine's hurting badly, look after it if you can.", "Heavy engine damage, go easy on it.")
+                    : Pick("The engine took a hit, I'm keeping an eye on it.", "Bit of engine damage, I'm watching it.");
+
+            public static string Aero(bool heavy, bool fr) => fr
+                ? heavy
+                    ? Pick("Grosse perte d'aéro, tu vas manquer d'appui.", "L'aéro a pris cher, la voiture va glisser plus.")
+                    : Pick("On a perdu un peu d'aéro.", "Petits dégâts sur l'aéro.")
+                : heavy
+                    ? Pick("Big aero loss, you'll be short on downforce.", "The aero took a beating, the car will slide more.")
+                    : Pick("We've lost a bit of aero.", "Some aero damage.");
+
+            public static string Body(bool heavy, bool fr) => fr
+                ? heavy
+                    ? Pick("Gros choc, la voiture est bien abîmée.", "Ça a tapé fort, la voiture a de gros dégâts.")
+                    : Pick("Tu as touché, la voiture a quelques dégâts.", "Petit choc, quelques dégâts sur la voiture.")
+                : heavy
+                    ? Pick("Big hit, the car's badly damaged.", "That was a hard one, heavy damage on the car.")
+                    : Pick("You've touched, a bit of damage on the car.", "Small hit, some damage on the car.");
+        }
 
         /// <summary>Un niveau de dégâts : annoncé quand il a monté d'au moins un cran et ne bouge plus.</summary>
         private sealed class Level

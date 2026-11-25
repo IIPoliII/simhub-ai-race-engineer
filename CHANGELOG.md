@@ -24,7 +24,7 @@ All notable changes to this project are documented here. The format follows
   ABS, TC), then in the garage.
 
 - Automatic "Damage, puncture, wheel lost" callout (on by default): one sentence per hit, once the car has settled
-  ("Front left suspension damaged. Aero damage.", "Puncture, front left!"). In Automobilista 2 and Project CARS 2,
+  ("The front left suspension took a small hit.", "Careful, the front right tyre is down."), worded like a real radio call and varied. In Automobilista 2 and Project CARS 2,
   suspension wheel by wheel, engine, aero, punctures and lost wheels come from the game; elsewhere, body damage and a
   puncture spotted from a tyre much lower than the others. Nothing in the pits, nor for damage already there at start.
 

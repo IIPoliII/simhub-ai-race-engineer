@@ -8,11 +8,14 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
-- Voice adjustments (new card, off by default): "brake bias 56", "brake balance 60 front 40 rear", "ABS 3", "one
-  click less TC". The engineer presses the game keys for you and reads the value back from the telemetry after each
-  press, until it reaches the value asked for. Works with games that have these keys and give the value to SimHub
-  (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Keys are recorded by pressing them in the plugin page; the game
-  must be in front.
+- Voice adjustments (new "Race engineer" card, off by default): "brake bias 56", "brake balance 60 front 40 rear",
+  "ABS 3", "one click less TC". The engineer presses the SimHub Control Mapper roles your buttons already use (ABS+,
+  TractionControl-, Brake Bias +...) and reads the value back from the telemetry after each press, until it reaches
+  the value asked for: nothing more to bind, in every game linked to the Control Mapper that gives the value to SimHub
+  (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Without the Control Mapper, game keyboard keys can be used instead.
+- Unprompted advice, like a real race engineer (never, rarely or sometimes, your choice): when crossing the line, if
+  the front tyres are much hotter than the rears (or the other way round) or pressures are very uneven, the engineer
+  says so and suggests a change. Never the same topic twice in a row.
 - "Fuel for ten laps": the engineer works out how much to add from the last laps' consumption.
 - "Boxing in two laps": the pit plan waits for the right lap.
 - iRacing: during "box box", fuel, tyres and fast repair go straight into the pit menu. Other games have no reliable

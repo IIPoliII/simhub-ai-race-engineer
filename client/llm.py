@@ -120,6 +120,16 @@ PLAN {"tyres": "mediums", "fuel": 32, "repair": false}
   That line is not read aloud.""",
 }
 
+# Conseil spontané : la « question » envoyée à l'IA quand coach.py a repéré quelque chose
+TIP = {
+    "fr": "(Le pilote ne t'a rien demandé : tu prends la parole de toi-même, comme un ingé de piste. Repéré dans la "
+          "télémétrie, avec le conseil à donner : {observation} Dis-le-lui en deux phrases courtes, comme une "
+          "proposition : ce qui est repéré, puis ce conseil. N'ajoute aucun autre réglage ni aucun autre chiffre.)",
+    "en": "(The driver didn't ask anything: you speak up yourself, like a race engineer. Spotted in the telemetry, with the "
+          "advice to give: {observation} Tell them in two short sentences, as a suggestion: what was spotted, then this "
+          "advice. Don't add any other change or any other number.)",
+}
+
 # Dit à la radio quand le modèle ne renvoie rien (modèle qui réfléchit et épuise max_tokens)
 EMPTY_ANSWER = {
     "fr": "Pas de réponse de l'IA, redemande-moi.",
@@ -164,6 +174,10 @@ class Engineer:
         if extra:
             kw["extra_body"] = extra
         return self.client.chat.completions.create(**kw)
+
+    def tip(self, observation: str, snapshot: dict | None) -> str:
+        """Conseil spontané (coach.py) : l'ingé prend la parole de lui-même sur ce qui a été repéré."""
+        return self.ask(TIP[self.language].format(observation=observation), snapshot)
 
     def ask(self, question: str, snapshot: dict | None, pit=None) -> str:
         """Réponse à dire à la radio ; vide si le modèle n'a rien répondu.

@@ -1045,9 +1045,16 @@ namespace AIRaceEngineer
 
         private Border BuildControlCard()
         {
-            var (card, body) = Section(T("Réglages à la voix", "Voice adjustments"),
-                T("L'ingé règle la voiture quand tu lui demandes : « mets le frein à 56 », « ABS 3 », « un cran de TC en moins ».",
-                  "The engineer adjusts the car when you ask: \"brake bias 56\", \"ABS 3\", \"one click less TC\"."));
+            var (card, body) = Section(T("Ingé de piste", "Race engineer"),
+                T("Il règle la voiture quand tu lui demandes (« mets le frein à 56 », « ABS 3 », « un cran de TC en moins ») et peut proposer des réglages de lui-même.",
+                  "Adjusts the car when you ask (\"brake bias 56\", \"ABS 3\", \"one click less TC\") and can suggest changes on his own."));
+            body.Children.Add(Field(T("Conseils spontanés", "Unprompted advice"),
+                Combo(new[] { ("off", T("Jamais", "Never")), ("rare", T("Rarement : 1 par quart d'heure au plus", "Rarely: at most 1 per 15 minutes")),
+                              ("normal", T("Parfois : 1 toutes les 6 minutes au plus", "Sometimes: at most 1 every 6 minutes")) },
+                      S.CoachTips, v => { S.CoachTips = v; Changed(); }),
+                T("En passant la ligne, quand les pneus montrent un déséquilibre (avant bien plus chaud que l'arrière, pressions inégales). Jamais deux fois le même sujet de suite. Utilise l'IA.",
+                  "When crossing the line, if the tyres show an imbalance (fronts much hotter than rears, uneven pressures). Never the same topic twice in a row. Uses the AI.")));
+            body.Children.Add(Divider());
             body.Children.Add(ToggleRow(T("Régler la voiture dans le jeu", "Adjust the car in the game"),
                 T("Appuie pour toi sur les mêmes rôles que tes boutons dans le Control Mapper de SimHub, jusqu'à la valeur demandée. Marche dans tous les jeux reliés au Control Mapper.",
                   "Presses the same roles as your buttons in SimHub's Control Mapper for you, until the value asked for. Works in every game linked to the Control Mapper."),

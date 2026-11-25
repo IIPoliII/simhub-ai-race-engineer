@@ -237,6 +237,8 @@ namespace AIRaceEngineer
         public string KeyAbsDown { get; set; } = "";
         public string KeyTcUp { get; set; } = "";
         public string KeyTcDown { get; set; } = "";
+        /// <summary>Conseils de réglage dits de lui-même par l'ingé : off, rare (un par quart d'heure au plus), normal (six minutes).</summary>
+        public string CoachTips { get; set; } = "off";
 
         public bool AutoStartClient { get; set; } = true;
         public bool PttTested { get; set; }
@@ -448,6 +450,7 @@ namespace AIRaceEngineer
                 language = Language,
                 swiss_numbers = SwissNumbers && Language == "fr",
                 game_control = GameControl,
+                coach_tips = CoachTips,
                 llm = new
                 {
                     provider = info.Id,

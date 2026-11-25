@@ -339,6 +339,22 @@ class Engine:
         self.say(text)
         return True
 
+    def coach_tip(self, observation: dict):
+        """Conseil spontané (coach.py), formulé par l'IA. Rien si l'IA n'est pas prête : il n'y a pas de question à qui répondre."""
+        if self.engineer is None or self.voice is None or not self.engineer.configured:
+            return
+        snap = self.snapshot()
+        if not snap or not snap.get("game_running"):
+            return
+        try:
+            answer = self.engineer.tip(observation.get(self.engineer.language) or observation["en"], snap)
+        except Exception as e:  # réseau, quota : un conseil manqué ne vaut pas une erreur affichée
+            log(f"  [conseil non formulé : {e}]")
+            return
+        if answer:
+            log(f"\n[conseil : {observation['topic']}]\n< {answer}")
+            self.say(answer)
+
     def answer_text(self, question: str, t_stt: float = 0.0):
         if self.engineer is None or self.voice is None:
             self.idle()
@@ -427,6 +443,10 @@ def run(plugin: Plugin, managed: bool):
                         engine.say(payload)
                 elif kind == "audio":
                     engine.answer_audio(payload)
+                elif kind == "coach":
+                    # Conseil resté en file derrière une réponse lente : la situation a pu changer
+                    if time.monotonic() - at < MAX_EVENT_AGE_MS / 1000:
+                        engine.coach_tip(payload)
             except Exception as e:
                 log(traceback.format_exc().rstrip())  # dans client.log, pour savoir d'où ça vient
                 plugin.status(t(f"Erreur : {e}", f"Error: {e}"), "error")
@@ -439,6 +459,9 @@ def run(plugin: Plugin, managed: bool):
     else:
         log(t("Relancé après un arrêt : pas de radio check.", "Restarted after a stop: no radio check."))
 
+    import coach
+    coach_state = coach.Coach()
+    coach_next = 0.0
     recorder = audio.Recorder()
     rev = cfg["rev"]
     last_id = None
@@ -495,6 +518,14 @@ def run(plugin: Plugin, managed: bool):
                     jobs.put(("say", text, time.monotonic()))
                 if done and engine.pit is plan:
                     engine.pit = None
+
+            # Conseils spontanés (réglage de la page) : regardés une fois par seconde, dits seulement en passant la ligne
+            level = (engine.cfg or {}).get("coach_tips", "off")
+            if level != "off" and engine.pit is None and not recording and time.monotonic() >= coach_next:
+                coach_next = time.monotonic() + 1.0
+                tip = coach_state.check(plugin.snapshot(), level)
+                if tip:
+                    jobs.put(("coach", tip, time.monotonic()))
 
             down = ptt_seen = p["ptt"]
             if down and not recording:

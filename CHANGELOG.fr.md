@@ -8,11 +8,15 @@ Tous les changements notables du projet sont notés ici. Le format suit
 ## [Non publié]
 
 ### Ajouté
-- Réglages à la voix (nouvelle carte, coupée par défaut) : « mets le frein à 56 », « brake balance 60 avant 40
-  arrière », « ABS 3 », « un cran de TC en moins ». L'ingé appuie pour toi sur les touches du jeu et relit la valeur
-  dans la télémétrie après chaque appui, jusqu'à la valeur demandée. Marche avec les jeux qui ont ces touches et
-  donnent la valeur à SimHub (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Les touches s'enregistrent en
-  appuyant dessus dans la page du plugin ; le jeu doit être au premier plan.
+- Réglages à la voix (nouvelle carte « Ingé de piste », coupée par défaut) : « mets le frein à 56 », « brake balance
+  60 avant 40 arrière », « ABS 3 », « un cran de TC en moins ». L'ingé appuie pour toi sur les rôles du Control Mapper
+  de SimHub que tes boutons utilisent déjà (ABS+, TractionControl-, Brake Bias +...) et relit la valeur dans la
+  télémétrie après chaque appui, jusqu'à la valeur demandée : rien à associer en plus, dans tous les jeux reliés au
+  Control Mapper et qui donnent la valeur à SimHub (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Sans Control
+  Mapper, des touches clavier du jeu peuvent servir à la place.
+- Conseils spontanés, comme un vrai ingé de piste (jamais, rarement ou parfois, au choix) : en passant la ligne, si
+  les pneus avant sont bien plus chauds que l'arrière (ou l'inverse) ou si les pressions sont très inégales, l'ingé
+  le signale et propose un réglage. Jamais deux fois le même sujet de suite.
 - « Essence pour dix tours » : l'ingé calcule ce qu'il faut rajouter avec la consommation des derniers tours.
 - « Je rentre dans deux tours » : le programme d'arrêt attend le bon tour.
 - iRacing : pendant « box box », l'essence, les pneus et la réparation rapide vont directement dans le menu des

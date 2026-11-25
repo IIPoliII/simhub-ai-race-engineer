@@ -319,6 +319,10 @@ class Engine:
         if cmd["kind"] == "fuel_laps":
             plan = controls.fuel_for_laps(snap, cmd["laps"])
             reply = None
+            if self.pit and plan["to_add"] is not None:
+                # Pendant un « box box » : c'est l'essence du programme d'arrêt (rappelée à l'entrée des stands)
+                with self.pit.lock:
+                    self.pit.plan["fuel"] = plan["to_add"]
             if plan["to_add"] is not None and self.pit_in_game(snap):
                 reply = self.plugin.pit_menu(fuel=plan["to_add"])
             text = controls.spoken_fuel(cmd["laps"], plan, reply, language)

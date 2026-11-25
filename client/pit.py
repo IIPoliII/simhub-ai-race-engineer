@@ -132,6 +132,10 @@ _FUEL = re.compile(r"\b(\d{1,3}|" + "|".join(sorted(_NUMBER_WORDS, key=len, reve
 _FILL = re.compile(r"\b(?:le plein|plein d'essence|fill(?: it)? up|full tank)\b", re.I)
 _TYRE = re.compile(r"\b(softs?|mediums?|hards?|pluie|wets?|inters?|intermédiaires?|slicks?)\b", re.I)
 _NEW = re.compile(r"\b(?:neufs?|new|fresh)\b", re.I)
+# « pneus neufs » sans type de pneu (l'IA oublie parfois sa ligne PLAN : c'était alors perdu)
+_NEW_TYRES = re.compile(r"\b(?:pneus?\s+neufs?|des\s+neufs|new\s+tyres?|new\s+tires?|fresh\s+tyres?|fresh\s+tires?)\b", re.I)
+_NO_REPAIR = re.compile(r"\b(?:pas\s+de\s+r[ée]paration|(?:ne\s+)?r[ée]pare\s+pas|sans\s+r[ée]par\w*|no\s+repairs?|don'?t\s+repair)\b", re.I)
+_REPAIR = re.compile(r"\b(?:r[ée]pare\w*|r[ée]paration|repairs?|fix\s+(?:the\s+)?(?:car|damage))\b", re.I)
 
 
 def from_driver(question: str, fill_up) -> dict:
@@ -146,6 +150,12 @@ def from_driver(question: str, fill_up) -> dict:
     t = _TYRE.search(question)
     if t:
         data["tyres"] = t.group(1).lower() + (" neufs" if _NEW.search(question) else "")
+    elif _NEW_TYRES.search(question):
+        data["tyres"] = "neufs"
+    if _NO_REPAIR.search(question):
+        data["repair"] = False
+    elif _REPAIR.search(question):
+        data["repair"] = True
     return data
 
 

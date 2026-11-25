@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using GameReaderCommon;
 
 namespace AIRaceEngineer
 {
     /// <summary>
     /// Annonces automatiques (sans IA, donc instantanées et gratuites) :
-    /// temps au tour, meilleur tour, tour invalidé, secteurs, écarts, positions, carburant.
+    /// temps au tour, meilleur tour, tour invalidé, secteurs, écarts, positions, dégâts, carburant.
     /// Le texte est écrit pour être lu à voix haute.
     /// </summary>
     internal sealed class Callouts
@@ -26,6 +27,8 @@ namespace AIRaceEngineer
         private DateTime _candidateSince, _lastPositionCall;
         private int _fuelLevelAnnounced = int.MaxValue;
         private double _minFuel = double.MaxValue;   // plus bas niveau depuis le dernier ravitaillement
+
+        private readonly DamageCallouts _damage = new DamageCallouts();
 
         // Secteurs : temps écoulé dans le tour à la fin de chaque secteur (numéro du secteur fini → temps)
         private Dictionary<int, TimeSpan> _splits = new Dictionary<int, TimeSpan>();
@@ -53,6 +56,7 @@ namespace AIRaceEngineer
             _splits = new Dictionary<int, TimeSpan>();
             _pendingSplits = _bestSplits = null;
             _bestSplitsLap = TimeSpan.Zero;
+            _damage.Reset();
         }
 
         /// <param name="valid">tour resté valide jusqu'à la ligne (suivi à chaque image par le plugin)</param>
@@ -89,7 +93,7 @@ namespace AIRaceEngineer
             _say(SpokenSplit(sector, (elapsed - best).TotalSeconds, s.Language == "fr"));
         }
 
-        public void Update(StatusDataBase d, int myPos, Opponent ahead, Opponent behind)
+        public void Update(StatusDataBase d, int myPos, Opponent ahead, Opponent behind, DamageState damage)
         {
             var s = _settings();
             bool fr = s.Language == "fr";
@@ -164,6 +168,15 @@ namespace AIRaceEngineer
                 }
             }
 
+            // --- Dégâts ---
+            // Suivis même quand l'annonce est coupée : la rallumer ne fait pas ressortir un vieux choc.
+            // Au stand, rien : les pneus changés et les réparations font bouger les valeurs
+            if (damage != null)
+            {
+                var said = _damage.Update(damage, fr, now);
+                if (said != null && s.CallDamage && d.IsInPitLane == 0) _say(said);
+            }
+
             // --- Carburant ---
             // Ravitaillement, même progressif (quelques dixièmes de litre par appel) : comparé au plus bas niveau vu
             if (d.Fuel < _minFuel) _minFuel = d.Fuel;
@@ -190,6 +203,16 @@ namespace AIRaceEngineer
             !string.IsNullOrEmpty(session) &&
             (session.IndexOf("race", StringComparison.OrdinalIgnoreCase) >= 0 ||
              session.IndexOf("course", StringComparison.OrdinalIgnoreCase) >= 0);
+
+        /// <summary>Session où le pilote roule seul contre le chrono (hotlap, time trial, superpole…) : les voitures
+        /// que le jeu montre sont des fantômes (meilleur tour, record), pas des adversaires.</summary>
+        internal static bool IsSolo(string session)
+        {
+            if (string.IsNullOrEmpty(session)) return false;
+            var s = new string(session.Where(char.IsLetter).ToArray()).ToLowerInvariant();
+            return s.Contains("hotlap") || s.Contains("hotstint") || s.Contains("timetrial") ||
+                   s.Contains("timeattack") || s.Contains("superpole");
+        }
 
         // Formulations vérifiées en passant la voix Kokoro dans Whisper :
         // FR « 2 minutes 18 secondes 9 » (« 2 18 9 » est lu « 219 »), EN « 2 18 9 » = « two eighteen nine »

@@ -5,6 +5,15 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Fixed
+- Damage: the engineer says where the damage is instead of a single average. In Automobilista 2 (and Project CARS
+  2), it gets aero, engine, suspension and brakes wheel by wheel: "Front right suspension at forty percent" rather
+  than "average damage at seven percent, nothing critical". Damaged suspension explains an off-centre steering
+  wheel, and on "box box" the engineer suggests fixing it even when the average is low. Other games only give the
+  average: the engineer says so.
+
 ## [0.6.2] - 2026-11-25
 
 ### Fixed

@@ -110,6 +110,28 @@ def fuel_proposal(snap: dict) -> dict:
     }
 
 
+# Une partie compte comme touchée à partir de ce pourcentage (en dessous : éraflure sans effet)
+DAMAGE_THRESHOLD = 5
+
+
+def damaged_parts(snap: dict) -> dict | None:
+    """Parties touchées d'après car.damage, par ex. {"suspension_fr": 40}. None si le jeu ne donne que la moyenne.
+    Une suspension à 40 % se cache dans une moyenne de 7 % : c'est elle qui décide de la réparation."""
+    damage = (snap.get("car") or {}).get("damage")
+    if not isinstance(damage, dict):
+        return None
+    parts = {}
+    for key, name in (("aero_pct", "aero"), ("engine_pct", "engine")):
+        v = damage.get(key)
+        if isinstance(v, (int, float)) and v >= DAMAGE_THRESHOLD:
+            parts[name] = v
+    for key, name in (("suspension_pct", "suspension"), ("brakes_pct", "brakes")):
+        for wheel, v in (damage.get(key) or {}).items():
+            if isinstance(v, (int, float)) and v >= DAMAGE_THRESHOLD:
+                parts[f"{name}_{wheel}"] = v
+    return parts
+
+
 _NUMBER_WORDS = {"dix": 10, "quinze": 15, "vingt": 20, "vingt-cinq": 25, "trente": 30, "quarante": 40, "cinquante": 50,
                  "soixante": 60, "septante": 70, "huitante": 80, "nonante": 90, "cent": 100, "ten": 10, "fifteen": 15,
                  "twenty": 20, "thirty": 30, "forty": 40, "fifty": 50, "sixty": 60, "seventy": 70, "eighty": 80,
@@ -147,6 +169,7 @@ class PitPlan:
         self.in_pit = bool(me.get("in_pit_lane"))
         self.proposal = fuel_proposal(snap)
         self.proposal["damage_pct"] = (snap.get("car") or {}).get("damage_avg_pct")
+        self.proposal["damaged"] = damaged_parts(snap)
         self.proposal["compound_now"] = (snap.get("tyres") or {}).get("compound")
         # null : pas encore décidé ; le rappel au stand ne dit que ce qui est décidé
         self.plan = {"tyres": None, "fuel": self.proposal["fuel_to_add"], "repair": None}

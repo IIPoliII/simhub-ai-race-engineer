@@ -5,6 +5,15 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Corrigé
+- Dégâts : l'ingé dit où est le dégât au lieu d'une seule moyenne. Dans Automobilista 2 (et Project CARS 2), il
+  reçoit l'aéro, le moteur, la suspension et les freins roue par roue : « Suspension avant droite à quarante pour
+  cent » plutôt que « dégâts moyens à sept pour cent, rien de critique ». Une suspension touchée explique un volant
+  plus droit, et au « box box » l'ingé propose de la réparer même si la moyenne est basse. Les autres jeux ne
+  donnent que la moyenne : l'ingé le dit.
+
 ## [0.6.2] - 2026-11-25
 
 ### Corrigé

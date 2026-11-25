@@ -139,7 +139,7 @@ namespace AIRaceEngineer
             lock (ServerLock)
             {
                 CancelServerStop();
-                _live = this;
+                _activePlugin = this;
             }
             EnsureServer();
 
@@ -396,13 +396,13 @@ namespace AIRaceEngineer
         // à la dernière instance créée, celle qui reçoit la télémétrie.
         private static readonly object ServerLock = new object();
         private static SnapshotServer _sharedServer;
-        private static volatile AIRaceEnginePlugin _live;
+        private static volatile AIRaceEnginePlugin _activePlugin;
         private static volatile Msg _serverError;
         private static System.Threading.Timer _serverStop;
 
         private static string RouteToLive(string path, Dictionary<string, string> query, string auth)
         {
-            var live = _live;
+            var live = _activePlugin;
             if (live != null) return live.Route(path, query, auth);
             return path == "/snapshot" ? JsonConvert.SerializeObject(OfflineSnapshot, Formatting.None) : null;
         }
@@ -441,7 +441,7 @@ namespace AIRaceEngineer
                 CancelServerStop();
                 _sharedServer?.Stop();
                 _sharedServer = null;
-                _live = null;
+                _activePlugin = null;
             }
         }
 
@@ -460,7 +460,7 @@ namespace AIRaceEngineer
                         _serverStop = null;
                         _sharedServer?.Stop();
                         _sharedServer = null;
-                        _live = null;
+                        _activePlugin = null;
                     }
                     timer.Dispose();
                 }, null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);

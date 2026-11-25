@@ -5,7 +5,7 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.7.0] - 2026-11-25
 
 ### Added
 - Voice adjustments (new "Race engineer" card, off by default): "brake bias 56", "brake balance 60 front 40 rear",
@@ -23,13 +23,19 @@ All notable changes to this project are documented here. The format follows
 - Setup advice: "I've got understeer, what do you suggest?" gives one or two ideas, first while driving (brake bias,
   ABS, TC), then in the garage.
 
+- Automatic "Damage, puncture, wheel lost" callout (on by default): one sentence per hit, once the car has settled
+  ("Front left suspension damaged. Aero damage.", "Puncture, front left!"). In Automobilista 2 and Project CARS 2,
+  suspension wheel by wheel, engine, aero, punctures and lost wheels come from the game; elsewhere, body damage and a
+  puncture spotted from a tyre much lower than the others. Nothing in the pits, nor for damage already there at start.
+
 ### Fixed
+- Hotlap with a ghost (AMS2 time trial, hotlap, hotstint, superpole): the ghost is no longer taken for an opponent.
+  The engineer no longer gives a gap to "the driver behind" or a position when you drive alone.
 - Engineer silent after switching games in SimHub: the voice client was given a copy of the port 8889 socket, so
   when SimHub recreated the plugin the port stayed taken with nobody answering ("Only one usage of each socket
   address" in the log) until SimHub was restarted. The port now moves from one plugin instance to the next without
   being closed, and is retried every 5 seconds if it is taken.
 
-### Fixed
 - Damage: the engineer says where the damage is instead of a single average. In Automobilista 2 (and Project CARS
   2), it gets aero, engine, suspension and brakes wheel by wheel: "Front right suspension at forty percent" rather
   than "average damage at seven percent, nothing critical". Damaged suspension explains an off-centre steering

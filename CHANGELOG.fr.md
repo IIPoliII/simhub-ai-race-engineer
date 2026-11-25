@@ -5,7 +5,7 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
-## [Non publié]
+## [0.7.0] - 2026-11-25
 
 ### Ajouté
 - Réglages à la voix (nouvelle carte « Ingé de piste », coupée par défaut) : « mets le frein à 56 », « brake balance
@@ -24,13 +24,20 @@ Tous les changements notables du projet sont notés ici. Le format suit
 - Conseils de réglage : « je sous-vire, tu proposes quoi ? » donne une ou deux pistes, d'abord en roulant (frein,
   ABS, TC), puis au garage.
 
+- Annonce automatique « Dégâts, crevaison, roue perdue » (cochée par défaut) : une phrase par choc, une fois la
+  voiture stabilisée (« Suspension avant gauche touchée. Dégâts aéro. », « Crevaison avant gauche ! »). Dans
+  Automobilista 2 et Project CARS 2, suspension roue par roue, moteur, aéro, crevaison et roue perdue viennent du jeu ;
+  ailleurs, dégâts de carrosserie et crevaison repérée par un pneu bien moins gonflé que les autres. Rien au stand,
+  ni pour les dégâts déjà là au lancement.
+
 ### Corrigé
+- Hotlap avec fantôme (time trial d'AMS2, hotlap, hotstint, superpole) : le fantôme n'est plus pris pour un
+  adversaire. L'ingé ne donne plus d'écart avec « le pilote derrière » ni de place quand tu roules seul.
 - Ingé muet après un changement de jeu dans SimHub : le client vocal recevait une copie du socket du port 8889, donc
   quand SimHub recréait le plugin, le port restait pris sans que personne ne réponde (« Une seule utilisation de
   chaque adresse de socket » dans le journal) jusqu'au redémarrage de SimHub. Le port passe maintenant d'une instance
   du plugin à la suivante sans être refermé, et il est réessayé toutes les 5 secondes s'il est pris.
 
-### Corrigé
 - Dégâts : l'ingé dit où est le dégât au lieu d'une seule moyenne. Dans Automobilista 2 (et Project CARS 2), il
   reçoit l'aéro, le moteur, la suspension et les freins roue par roue : « Suspension avant droite à quarante pour
   cent » plutôt que « dégâts moyens à sept pour cent, rien de critique ». Une suspension touchée explique un volant

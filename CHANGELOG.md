@@ -29,6 +29,13 @@ All notable changes to this project are documented here. The format follows
   address" in the log) until SimHub was restarted. The port now moves from one plugin instance to the next without
   being closed, and is retried every 5 seconds if it is taken.
 
+### Fixed
+- Damage: the engineer says where the damage is instead of a single average. In Automobilista 2 (and Project CARS
+  2), it gets aero, engine, suspension and brakes wheel by wheel: "Front right suspension at forty percent" rather
+  than "average damage at seven percent, nothing critical". Damaged suspension explains an off-centre steering
+  wheel, and on "box box" the engineer suggests fixing it even when the average is low. Other games only give the
+  average: the engineer says so.
+
 ## [0.6.2] - 2026-11-25
 
 ### Fixed

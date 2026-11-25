@@ -47,6 +47,12 @@
   },
   "car": {
     "damage_avg_pct": 0.0,
+    "damage": {
+      "aero_pct": 0,
+      "engine_pct": 0,
+      "suspension_pct": { "fl": 0, "fr": 0, "rl": 0, "rr": 0 },
+      "brakes_pct": { "fl": 0, "fr": 0, "rl": 0, "rr": 0 }
+    },
     "tc": 3,
     "abs": 2,
     "brake_bias": 52.5,

@@ -944,6 +944,7 @@ namespace AIRaceEngineer
                 car = new
                 {
                     damage_avg_pct = R(d.CarDamagesAvg, 1),
+                    damage = Damage.Detail(d), // où est le dégât (AMS2, PC2) ; null si le jeu ne le dit pas
                     tc = d.TCLevel,
                     abs = d.ABSLevel,
                     brake_bias = d.BrakeBias > 0 ? R(d.BrakeBias, 1) : null,

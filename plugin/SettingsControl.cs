@@ -38,7 +38,7 @@ namespace AIRaceEngineer
         private bool _noticeDismissed;
         private DispatcherTimer _saveTimer;
 
-        private Border _banner, _aiCard, _voiceCard, _calloutsCard, _pttCard, _clientCard, _testBox;
+        private Border _banner, _aiCard, _voiceCard, _calloutsCard, _pttCard, _clientCard, _controlCard, _testBox;
         private string _bannerMode;
         private bool _bannerDismissed, _installClicked, _installSeen;
         private DateTime _installClickedAt;
@@ -140,6 +140,7 @@ namespace AIRaceEngineer
             _aiCard = BuildAiCard();
             _voiceCard = BuildVoiceCard();
             _calloutsCard = BuildCalloutsCard();
+            _controlCard = BuildControlCard();
             _pttCard = BuildPttCard();
             _clientCard = BuildClientCard();
             _columns = new Grid { Margin = new Thickness(0, 16, 0, 0) };
@@ -210,10 +211,10 @@ namespace AIRaceEngineer
             _columnCount = n;
 
             var layout = n == 3
-                ? new[] { new[] { _aiCard, _clientCard }, new[] { _voiceCard, _pttCard }, new[] { _calloutsCard } }
+                ? new[] { new[] { _aiCard, _clientCard }, new[] { _voiceCard, _pttCard }, new[] { _calloutsCard, _controlCard } }
                 : n == 2
-                    ? new[] { new[] { _aiCard, _pttCard, _clientCard }, new[] { _voiceCard, _calloutsCard } }
-                    : new[] { new[] { _aiCard, _voiceCard, _calloutsCard, _pttCard, _clientCard } };
+                    ? new[] { new[] { _aiCard, _pttCard, _clientCard }, new[] { _voiceCard, _calloutsCard, _controlCard } }
+                    : new[] { new[] { _aiCard, _voiceCard, _calloutsCard, _controlCard, _pttCard, _clientCard } };
 
             foreach (var panel in _columns.Children.OfType<Panel>()) panel.Children.Clear();
             _columns.Children.Clear();
@@ -1036,6 +1037,94 @@ namespace AIRaceEngineer
             var left = T("tours restants", "laps left");
             rows.Add(Field(T("Prévenir à", "Warn at"), Combo(new[] { ("2", "2 " + left), ("3", "3 " + left), ("4", "4 " + left), ("5", "5 " + left) },
                 S.FuelWarningLaps.ToString(), v => { S.FuelWarningLaps = int.Parse(v); Changed(); })));
+        }
+
+        // =====================================================================
+        // Réglages dans le jeu, à la voix
+        // =====================================================================
+
+        private Border BuildControlCard()
+        {
+            var (card, body) = Section(T("Ingé de piste", "Race engineer"),
+                T("Il règle la voiture quand tu lui demandes (« mets le frein à 56 », « ABS 3 », « un cran de TC en moins ») et peut proposer des réglages de lui-même.",
+                  "Adjusts the car when you ask (\"brake bias 56\", \"ABS 3\", \"one click less TC\") and can suggest changes on his own."));
+            body.Children.Add(Field(T("Conseils spontanés", "Unprompted advice"),
+                Combo(new[] { ("off", T("Jamais", "Never")), ("rare", T("Rarement : 1 par quart d'heure au plus", "Rarely: at most 1 per 15 minutes")),
+                              ("normal", T("Parfois : 1 toutes les 6 minutes au plus", "Sometimes: at most 1 every 6 minutes")) },
+                      S.CoachTips, v => { S.CoachTips = v; Changed(); }),
+                T("En passant la ligne, quand les pneus montrent un déséquilibre (avant bien plus chaud que l'arrière, pressions inégales). Jamais deux fois le même sujet de suite. Utilise l'IA.",
+                  "When crossing the line, if the tyres show an imbalance (fronts much hotter than rears, uneven pressures). Never the same topic twice in a row. Uses the AI.")));
+            body.Children.Add(Divider());
+            body.Children.Add(ToggleRow(T("Régler la voiture dans le jeu", "Adjust the car in the game"),
+                T("Appuie pour toi sur les mêmes rôles que tes boutons dans le Control Mapper de SimHub, jusqu'à la valeur demandée. Marche dans tous les jeux reliés au Control Mapper.",
+                  "Presses the same roles as your buttons in SimHub's Control Mapper for you, until the value asked for. Works in every game linked to the Control Mapper."),
+                S.GameControl, v => { S.GameControl = v; Changed(); }));
+            body.Children.Add(RadioLine(MapperSummary()));
+            body.Children.Add(Divider());
+            body.Children.Add(new TextBlock
+            {
+                Text = T("Sans Control Mapper : associe ces actions à des touches du clavier dans le jeu, puis clique dans un champ et appuie sur la même touche (le jeu doit alors être au premier plan). Des touches enregistrées ici passent avant le Control Mapper. Retour arrière efface.",
+                         "Without the Control Mapper: bind these actions to keyboard keys in the game, then click a field and press the same key (the game must then be in front). Keys saved here take priority over the Control Mapper. Backspace clears it."),
+                FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8),
+            });
+            body.Children.Add(Field(T("Frein vers l'avant", "Brake bias forward"), KeyBox(S.KeyBrakeBiasFront, v => S.KeyBrakeBiasFront = v)));
+            body.Children.Add(Field(T("Frein vers l'arrière", "Brake bias rearward"), KeyBox(S.KeyBrakeBiasRear, v => S.KeyBrakeBiasRear = v)));
+            body.Children.Add(Field(T("ABS +", "ABS +"), KeyBox(S.KeyAbsUp, v => S.KeyAbsUp = v)));
+            body.Children.Add(Field(T("ABS −", "ABS −"), KeyBox(S.KeyAbsDown, v => S.KeyAbsDown = v)));
+            body.Children.Add(Field(T("TC +", "TC +"), KeyBox(S.KeyTcUp, v => S.KeyTcUp = v)));
+            body.Children.Add(Field(T("TC −", "TC −"), KeyBox(S.KeyTcDown, v => S.KeyTcDown = v)));
+            body.Children.Add(new TextBlock
+            {
+                Text = T("iRacing : l'essence, les pneus et la réparation demandés pendant « box box » vont aussi directement dans le menu des stands. Les autres jeux n'ont pas de moyen sûr de remplir ce menu : l'ingé te dit quoi régler.",
+                         "iRacing: fuel, tyres and repairs asked for during \"box box\" also go straight into the pit menu. Other games have no reliable way to fill that menu: the engineer tells you what to set."),
+                FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0),
+            });
+            return card;
+        }
+
+        /// <summary>Rôles du Control Mapper trouvés pour le frein, l'ABS et le TC (ou ce qui manque).</summary>
+        private string MapperSummary()
+        {
+            var found = _plugin.MapperRoles();
+            if (found.Count == 0)
+                return T("Control Mapper : aucun rôle Brake Bias, ABS ou TractionControl trouvé. Utilise les touches clavier ci-dessous.",
+                         "Control Mapper: no Brake Bias, ABS or TractionControl role found. Use the keyboard keys below.");
+            var names = new System.Collections.Generic.Dictionary<string, string> { ["bb"] = T("frein", "brake bias"), ["abs"] = "ABS", ["tc"] = "TC" };
+            var parts = found.Select(f => $"{names[f.Key]} ({f.Value})");
+            var missing = names.Keys.Where(k => !found.ContainsKey(k)).Select(k => names[k]).ToList();
+            return T("Control Mapper : ", "Control Mapper: ") + string.Join(", ", parts) +
+                   (missing.Count > 0 ? T(". Pas de rôle pour : ", ". No role for: ") + string.Join(", ", missing) : "") + ".";
+        }
+
+        /// <summary>Champ qui retient la touche appuyée (avec Ctrl, Shift, Alt), au lieu d'un nom à taper.</summary>
+        private TextBox KeyBox(string value, Action<string> onChange)
+        {
+            var box = new TextBox { Text = value ?? "", IsReadOnly = true, IsReadOnlyCaretVisible = false, HorizontalAlignment = HorizontalAlignment.Stretch };
+            box.PreviewKeyDown += (s, e) =>
+            {
+                e.Handled = true;
+                var key = e.Key == System.Windows.Input.Key.System ? e.SystemKey : e.Key;
+                switch (key)
+                {
+                    case System.Windows.Input.Key.LeftCtrl: case System.Windows.Input.Key.RightCtrl:
+                    case System.Windows.Input.Key.LeftShift: case System.Windows.Input.Key.RightShift:
+                    case System.Windows.Input.Key.LeftAlt: case System.Windows.Input.Key.RightAlt:
+                    case System.Windows.Input.Key.LWin: case System.Windows.Input.Key.RWin:
+                        return; // on attend la touche qui va avec
+                    case System.Windows.Input.Key.Tab:
+                        e.Handled = false; // passer au champ suivant
+                        return;
+                    case System.Windows.Input.Key.Back:
+                        box.Text = "";
+                        break;
+                    default:
+                        box.Text = GameControls.Binding.Format(System.Windows.Input.Keyboard.Modifiers, key);
+                        break;
+                }
+                onChange(box.Text);
+                Changed();
+            };
+            return box;
         }
 
         // =====================================================================

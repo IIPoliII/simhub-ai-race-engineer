@@ -1,7 +1,8 @@
 """« Box box » : préparation de l'arrêt au stand, avec tous les jeux.
 
 Le pilote annonce qu'il rentre ; l'ingé propose l'essence (calculée ici, pas par l'IA), demande les pneus,
-puis rappelle le programme à l'entrée des stands. Rien n'est réglé dans le jeu : le pilote fait les réglages.
+puis rappelle le programme à l'entrée des stands. Avec iRacing (réglages à la voix activés), le programme va aussi
+dans le menu des stands du jeu ; ailleurs, le pilote fait les réglages.
 """
 import json
 import math
@@ -16,8 +17,21 @@ BOX_CALL = re.compile(
     r"|\bboxbox\b"
     rf"|\bbox[\s,]+(?:ce\s+|cette\s+|c'est\s+|this\s+)?(?:tour|lap)\b"
     r"|\b(?:je|on)\s+(?:rentre|rentrons|s'arrête|m'arrête)\b(?:\s+(?:au|aux)\s+stands?)?"
+    r"|\bje\s+veux\s+(?:m'arrêter|rentrer|piter|pitter)\b|\bpitt?er\s+dans\b"
     r"|\bpit(?:ting)?\s+(?:this\s+lap|now|in)\b|\bboxing\b|\bwe(?:'re| are)\s+pitting\b",
     re.I)
+# « je rentre dans deux tours », « pitting in 3 laps »
+_LATER = re.compile(r"\b(?:dans|in)\s+(\d|un|deux|trois|quatre|cinq|one|two|three|four|five)\s+(?:tours?|laps?)\b", re.I)
+_LATER_WORDS = {"un": 1, "deux": 2, "trois": 3, "quatre": 4, "cinq": 5, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5}
+
+
+def laps_later(question: str) -> int:
+    """Tours avant l'arrêt annoncé (0 : ce tour-ci)."""
+    m = _LATER.search(question)
+    if not m:
+        return 0
+    word = m.group(1).lower()
+    return int(word) if word.isdigit() else _LATER_WORDS[word]
 CANCEL = re.compile(
     r"\bannul\w*\b.*\b(?:box|boxe|arrêt|stand)\b|\bon\s+reste\s+(?:dehors|en\s+piste)\b|\bpas\s+de\s+box\b"
     r"|\bcancel\b.*\b(?:box|stop|pit)\b|\bstay(?:ing)?\s+out\b|\bno\s+(?:box|stop)\b",
@@ -118,6 +132,10 @@ _FUEL = re.compile(r"\b(\d{1,3}|" + "|".join(sorted(_NUMBER_WORDS, key=len, reve
 _FILL = re.compile(r"\b(?:le plein|plein d'essence|fill(?: it)? up|full tank)\b", re.I)
 _TYRE = re.compile(r"\b(softs?|mediums?|hards?|pluie|wets?|inters?|intermédiaires?|slicks?)\b", re.I)
 _NEW = re.compile(r"\b(?:neufs?|new|fresh)\b", re.I)
+# « pneus neufs » sans type de pneu (l'IA oublie parfois sa ligne PLAN : c'était alors perdu)
+_NEW_TYRES = re.compile(r"\b(?:pneus?\s+neufs?|des\s+neufs|new\s+tyres?|new\s+tires?|fresh\s+tyres?|fresh\s+tires?)\b", re.I)
+_NO_REPAIR = re.compile(r"\b(?:pas\s+de\s+r[ée]paration|(?:ne\s+)?r[ée]pare\s+pas|sans\s+r[ée]par\w*|no\s+repairs?|don'?t\s+repair)\b", re.I)
+_REPAIR = re.compile(r"\b(?:r[ée]pare\w*|r[ée]paration|repairs?|fix\s+(?:the\s+)?(?:car|damage))\b", re.I)
 
 
 def from_driver(question: str, fill_up) -> dict:
@@ -132,18 +150,27 @@ def from_driver(question: str, fill_up) -> dict:
     t = _TYRE.search(question)
     if t:
         data["tyres"] = t.group(1).lower() + (" neufs" if _NEW.search(question) else "")
+    elif _NEW_TYRES.search(question):
+        data["tyres"] = "neufs"
+    if _NO_REPAIR.search(question):
+        data["repair"] = False
+    elif _REPAIR.search(question):
+        data["repair"] = True
     return data
 
 
 class PitPlan:
     """Programme d'arrêt en cours. Partagé entre le fil de travail (questions) et la boucle principale (stands)."""
 
-    def __init__(self, snap: dict | None, language: str):
+    def __init__(self, snap: dict | None, language: str, laps_later: int = 0, in_game: bool = False):
         snap = snap or {}
         me = snap.get("me") or {}
         self.language = language
         self.lock = threading.Lock()
-        self.start_lap = me.get("lap")
+        self.laps_later = laps_later   # « je rentre dans deux tours »
+        self.in_game = in_game         # programme mis tout seul dans le menu des stands du jeu (iRacing)
+        # Le programme expire deux tours après le tour d'arrêt prévu
+        self.start_lap = me.get("lap") + laps_later if isinstance(me.get("lap"), int) else me.get("lap")
         self.in_pit = bool(me.get("in_pit_lane"))
         self.proposal = fuel_proposal(snap)
         self.proposal["damage_pct"] = (snap.get("car") or {}).get("damage_avg_pct")
@@ -154,7 +181,24 @@ class PitPlan:
 
     def context(self) -> dict:
         with self.lock:
-            return {"proposal": self.proposal, "plan": dict(self.plan)}
+            return {"proposal": self.proposal, "plan": dict(self.plan), "in_laps": self.laps_later,
+                    "set_in_game": self.in_game}
+
+    def menu_params(self) -> dict:
+        """Programme pour le menu des stands du jeu (/pit du plugin) : seulement ce qui est décidé."""
+        with self.lock:
+            plan = dict(self.plan)
+        params = {}
+        fuel = plan.get("fuel")
+        if isinstance(fuel, (int, float)) and not isinstance(fuel, bool):
+            params["fuel"] = max(0, round(fuel))
+        tyres = plan.get("tyres")
+        if isinstance(tyres, str) and tyres.strip():
+            keep = re.search(r"\b(?:garde|gardes|même|mêmes|pas\s+de\s+pneus|same|keep|no\s+tyres)\b", tyres, re.I)
+            params["tyres"] = 0 if keep else 1
+        if isinstance(plan.get("repair"), bool):
+            params["repair"] = int(plan["repair"])
+        return params
 
     def absorb(self, answer: str, question: str = "") -> str:
         """Retire la ligne PLAN de la réponse de l'IA et met le programme à jour. Renvoie le texte à dire.

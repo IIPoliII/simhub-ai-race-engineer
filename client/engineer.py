@@ -137,6 +137,21 @@ class Plugin:
         except (httpx.HTTPError, ValueError):
             pass  # plugin d'avant le test du micro
 
+    def control(self, **params) -> dict | None:
+        """Réglage dans le jeu (répartition de freinage, ABS, TC) : le plugin appuie sur les touches du jeu jusqu'à
+        la valeur, ce qui peut prendre quelques secondes. None : plugin d'avant les réglages à la voix."""
+        try:
+            return self.get("/control", timeout=15.0, **params)
+        except (httpx.HTTPError, ValueError):
+            return None
+
+    def pit_menu(self, **params) -> dict | None:
+        """Programme d'arrêt mis dans le menu des stands du jeu (iRacing seulement)."""
+        try:
+            return self.get("/pit", timeout=3.0, **params)
+        except (httpx.HTTPError, ValueError):
+            return None
+
     def status(self, message: str, code: str = "loading"):
         """Affiché dans la page du plugin, et dans le journal.
         code : état indépendant de la langue, lu par la page (ready, speaking, loading, warn, error)."""
@@ -290,6 +305,56 @@ class Engine:
             return
         self.answer_text(text, t_stt)
 
+    def pit_in_game(self, snap: dict) -> bool:
+        """Le programme d'arrêt va-t-il tout seul dans le menu des stands ? (iRacing, réglages à la voix activés)"""
+        import controls
+        return bool(self.cfg.get("game_control")) and snap.get("game") in controls.PIT_MENU_GAMES
+
+    def adjust(self, question: str, snap: dict, language: str) -> bool:
+        """Réglage demandé à la voix (frein, ABS, TC, essence pour N tours) : fait sans l'IA. False si ce n'en est pas un."""
+        import controls
+        cmd = controls.parse(question)
+        if not cmd:
+            return False
+        if cmd["kind"] == "fuel_laps":
+            plan = controls.fuel_for_laps(snap, cmd["laps"])
+            reply = None
+            if self.pit and plan["to_add"] is not None:
+                # Pendant un « box box » : c'est l'essence du programme d'arrêt (rappelée à l'entrée des stands)
+                with self.pit.lock:
+                    self.pit.plan["fuel"] = plan["to_add"]
+            if plan["to_add"] is not None and self.pit_in_game(snap):
+                reply = self.plugin.pit_menu(fuel=plan["to_add"])
+            text = controls.spoken_fuel(cmd["laps"], plan, reply, language)
+        else:
+            self.plugin.status(t("Réglage en cours", "Adjusting"), "speaking")
+            params = {"k": cmd["kind"]}
+            if "target" in cmd:
+                params["v"] = cmd["target"]
+            else:
+                params["s"] = cmd["steps"]
+            reply = self.plugin.control(**params)
+            text = controls.spoken(cmd, reply, language)
+        log(f"< {text}\n  [réglage {cmd} : {reply}]")
+        self.say(text)
+        return True
+
+    def coach_tip(self, observation: dict):
+        """Conseil spontané (coach.py), formulé par l'IA. Rien si l'IA n'est pas prête : il n'y a pas de question à qui répondre."""
+        if self.engineer is None or self.voice is None or not self.engineer.configured:
+            return
+        snap = self.snapshot()
+        if not snap or not snap.get("game_running"):
+            return
+        try:
+            answer = self.engineer.tip(observation.get(self.engineer.language) or observation["en"], snap)
+        except Exception as e:  # réseau, quota : un conseil manqué ne vaut pas une erreur affichée
+            log(f"  [conseil non formulé : {e}]")
+            return
+        if answer:
+            log(f"\n[conseil : {observation['topic']}]\n< {answer}")
+            self.say(answer)
+
     def answer_text(self, question: str, t_stt: float = 0.0):
         if self.engineer is None or self.voice is None:
             self.idle()
@@ -302,8 +367,13 @@ class Engine:
             self.say(pit.cancelled(language))
             return
         snap = self.snapshot()
-        if pit.BOX_CALL.search(question) and snap and snap.get("game_running"):
-            self.pit = pit.PitPlan(snap, language)  # nouvel appel : programme repris de zéro
+        running = bool(snap and snap.get("game_running"))
+        boxing = pit.BOX_CALL.search(question)
+        if running and not boxing and self.adjust(question, snap, language):
+            return
+        if boxing and running:
+            # nouvel appel : programme repris de zéro, mis dans le menu des stands quand le jeu le permet
+            self.pit = pit.PitPlan(snap, language, laps_later=pit.laps_later(question), in_game=self.pit_in_game(snap))
             # Whisper écrit parfois « Bix, bix » : l'IA, elle, doit voir l'appel tel que le pilote l'a dit
             question = pit.normalize_call(question)
         if self.pit:
@@ -315,6 +385,9 @@ class Engine:
             self.ai_issue = (f"Erreur IA : {e}", f"AI error: {e}", "error")
             self.idle()
             return
+        if self.pit and self.pit.in_game:
+            reply = self.plugin.pit_menu(**self.pit.menu_params())
+            log(f"  [menu des stands : {(reply or {}).get('result')}]")
         if not answer:
             # Modèle qui réfléchit et épuise max_tokens : on le dit à la radio plutôt que rester muet
             from llm import EMPTY_ANSWER
@@ -370,6 +443,10 @@ def run(plugin: Plugin, managed: bool):
                         engine.say(payload)
                 elif kind == "audio":
                     engine.answer_audio(payload)
+                elif kind == "coach":
+                    # Conseil resté en file derrière une réponse lente : la situation a pu changer
+                    if time.monotonic() - at < MAX_EVENT_AGE_MS / 1000:
+                        engine.coach_tip(payload)
             except Exception as e:
                 log(traceback.format_exc().rstrip())  # dans client.log, pour savoir d'où ça vient
                 plugin.status(t(f"Erreur : {e}", f"Error: {e}"), "error")
@@ -382,6 +459,9 @@ def run(plugin: Plugin, managed: bool):
     else:
         log(t("Relancé après un arrêt : pas de radio check.", "Restarted after a stop: no radio check."))
 
+    import coach
+    coach_state = coach.Coach()
+    coach_next = 0.0
     recorder = audio.Recorder()
     rev = cfg["rev"]
     last_id = None
@@ -438,6 +518,14 @@ def run(plugin: Plugin, managed: bool):
                     jobs.put(("say", text, time.monotonic()))
                 if done and engine.pit is plan:
                     engine.pit = None
+
+            # Conseils spontanés (réglage de la page) : regardés une fois par seconde, dits seulement en passant la ligne
+            level = (engine.cfg or {}).get("coach_tips", "off")
+            if level != "off" and engine.pit is None and not recording and time.monotonic() >= coach_next:
+                coach_next = time.monotonic() + 1.0
+                tip = coach_state.check(plugin.snapshot(), level)
+                if tip:
+                    jobs.put(("coach", tip, time.monotonic()))
 
             down = ptt_seen = p["ptt"]
             if down and not recording:

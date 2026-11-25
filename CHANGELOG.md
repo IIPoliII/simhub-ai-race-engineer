@@ -5,6 +5,24 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Voice adjustments (new "Race engineer" card, off by default): "brake bias 56", "brake balance 60 front 40 rear",
+  "ABS 3", "one click less TC". The engineer presses the SimHub Control Mapper roles your buttons already use (ABS+,
+  TractionControl-, Brake Bias +...) and reads the value back from the telemetry after each press, until it reaches
+  the value asked for: nothing more to bind, in every game linked to the Control Mapper that gives the value to SimHub
+  (Automobilista 2, ACC, iRacing, LMU, rFactor 2...). Without the Control Mapper, game keyboard keys can be used instead.
+- Unprompted advice, like a real race engineer (never, rarely or sometimes, your choice): when crossing the line, if
+  the front tyres are much hotter than the rears (or the other way round) or pressures are very uneven, the engineer
+  says so and suggests a change. Never the same topic twice in a row.
+- "Fuel for ten laps": the engineer works out how much to add from the last laps' consumption.
+- "Boxing in two laps": the pit plan waits for the right lap.
+- iRacing: during "box box", fuel, tyres and fast repair go straight into the pit menu. Other games have no reliable
+  way to fill that menu: the engineer tells you what to set.
+- Setup advice: "I've got understeer, what do you suggest?" gives one or two ideas, first while driving (brake bias,
+  ABS, TC), then in the garage.
+
 ## [0.6.2] - 2026-11-25
 
 ### Fixed

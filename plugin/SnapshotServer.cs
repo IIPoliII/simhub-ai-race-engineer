@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Net;
 using System.Net.Sockets;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
@@ -31,6 +32,7 @@ namespace AIRaceEngineer
         public void Start()
         {
             _listener = new TcpListener(IPAddress.Loopback, _port);
+            NotInherited(_listener.Server);
             _listener.Start();
             _running = true;
             _thread = new Thread(Loop) { IsBackground = true, Name = "AIRaceEngineer.Http" };
@@ -50,6 +52,7 @@ namespace AIRaceEngineer
                 try
                 {
                     var client = _listener.AcceptTcpClient();
+                    NotInherited(client.Client);
                     // Chaque requête à part : un /poll qui attend ne bloque pas les autres
                     ThreadPool.QueueUserWorkItem(_ => Serve(client));
                 }
@@ -61,6 +64,22 @@ namespace AIRaceEngineer
                 }
             }
         }
+
+        /// <summary>
+        /// Sous .NET Framework, les sockets sont héritables : le client vocal, lancé avec ses sorties redirigées, recevait
+        /// une copie du socket d'écoute. Quand SimHub recréait le plugin (changement de jeu), l'ancienne instance fermait
+        /// le sien mais la copie du client gardait le port 8889 en écoute sans que personne n'accepte les connexions :
+        /// la nouvelle instance ne pouvait plus l'ouvrir et les requêtes restaient sans réponse.
+        /// </summary>
+        private static void NotInherited(Socket socket)
+        {
+            try { SetHandleInformation(socket.Handle, HandleFlagInherit, 0); } catch { }
+        }
+
+        private const uint HandleFlagInherit = 1;
+
+        [DllImport("kernel32.dll", SetLastError = true)]
+        private static extern bool SetHandleInformation(IntPtr handle, uint mask, uint flags);
 
         private void Serve(TcpClient client)
         {

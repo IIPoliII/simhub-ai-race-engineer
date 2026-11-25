@@ -23,6 +23,12 @@ All notable changes to this project are documented here. The format follows
 - Setup advice: "I've got understeer, what do you suggest?" gives one or two ideas, first while driving (brake bias,
   ABS, TC), then in the garage.
 
+### Fixed
+- Engineer silent after switching games in SimHub: the voice client was given a copy of the port 8889 socket, so
+  when SimHub recreated the plugin the port stayed taken with nobody answering ("Only one usage of each socket
+  address" in the log) until SimHub was restarted. The port now moves from one plugin instance to the next without
+  being closed, and is retried every 5 seconds if it is taken.
+
 ## [0.6.2] - 2026-11-25
 
 ### Fixed

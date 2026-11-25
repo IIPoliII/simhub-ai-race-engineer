@@ -49,7 +49,6 @@ namespace AIRaceEngineer
         public ClientRunner Client => SharedClient;
         public string GameName { get; private set; }   // null : pas de jeu en cours
         public string GameDetail { get; private set; } = "";
-        private Msg _serverError;
         public string ServerError => _serverError;
         /// <summary>Dernier message du client vocal, déjà dans la langue des réglages.</summary>
         public string ClientStatus => _clientStatus;
@@ -62,7 +61,6 @@ namespace AIRaceEngineer
         public bool ClientConnected => (DateTime.UtcNow - _lastClientPoll).TotalSeconds < 2;
         public string Url => $"http://127.0.0.1:{Port}/snapshot";
 
-        private SnapshotServer _server;
         private Callouts _callouts;
         private volatile bool _ptt;
         private long _pttDownAt;
@@ -137,20 +135,16 @@ namespace AIRaceEngineer
             // Push-to-talk : à associer à un bouton dans Controls and events
             pluginManager.AddAction(PushToTalkAction, GetType(), (pm, a) => PttPressed(), (pm, a) => PttReleased());
 
-            _server = new SnapshotServer(Port, Route);
-            try
+            // Le serveur du port 8889 est partagé : il passe d'une instance à l'autre sans être refermé
+            lock (ServerLock)
             {
-                if (_token == null) CreateToken();
-                _server.Start();
-                SimHub.Logging.Current.Info($"[AI Race Engineer] Télémétrie disponible sur {Url}");
+                CancelServerStop();
+                _live = this;
             }
-            catch (Exception ex)
-            {
-                _serverError = new Msg($"Impossible d'ouvrir le port {Port} : {ex.Message}", $"Cannot open port {Port}: {ex.Message}");
-                SimHub.Logging.Current.Error("[AI Race Engineer] " + _serverError.FrText);
-            }
+            EnsureServer();
 
-            // Lance le client vocal, et le relance s'il s'arrête (sauf s'il plante en boucle)
+            // Lance le client vocal, et le relance s'il s'arrête (sauf s'il plante en boucle).
+            // Réessaie aussi d'ouvrir le port s'il était pris.
             _watchdog = new System.Threading.Timer(_ => Watchdog(), null, 0, 5000);
             // Une fois par processus : une DLL préparée par ce même SimHub n'est pas une copie ratée
             if (!_stagedChecked) { _stagedChecked = true; Updater.CheckStaged(); }
@@ -172,7 +166,10 @@ namespace AIRaceEngineer
             bool last = System.Threading.Interlocked.Decrement(ref _instances) <= 0;
             if (exiting) Client.Stop();
             else if (last) StopClientLater();
-            _server?.Stop();
+            // Instance arrêtée mais encore branchée au serveur jusqu'à la suivante : plus de jeu à annoncer
+            _snapshot = OfflineSnapshot;
+            if (exiting) StopServer();
+            else if (last) StopServerLater();
             // Mise à jour préparée et SimHub fermé sans passer par « Redémarrer » : on la copie quand même
             if (exiting && !_exitScriptLaunched && System.IO.File.Exists(Updater.StagedDll))
             {
@@ -235,7 +232,9 @@ namespace AIRaceEngineer
             {
                 lock (_watchdogLock)
                 {
-                    if (_ended || !Settings.AutoStartClient || ServerError != null) return;
+                    if (_ended) return;
+                    if (_sharedServer == null) EnsureServer();
+                    if (!Settings.AutoStartClient || ServerError != null) return;
                     if (Client.Running || ClientConnected || Client.QuickExits >= 3) return;
                     if (DateTime.UtcNow < _nextClientAttempt) return;
                     _nextClientAttempt = DateTime.UtcNow.AddSeconds(15);
@@ -390,6 +389,91 @@ namespace AIRaceEngineer
             System.IO.Directory.CreateDirectory(EngineerSettings.DataDir);
             System.IO.File.WriteAllText(TokenPath, token);
             _token = token; // seulement une fois écrit : sinon la prochaine instance réessaie
+        }
+
+        // Un seul serveur par processus, comme le client vocal. SimHub recrée le plugin à chaque changement de jeu, parfois
+        // en créant la nouvelle instance avant d'arrêter l'ancienne : le port reste ouvert et les requêtes vont toujours
+        // à la dernière instance créée, celle qui reçoit la télémétrie.
+        private static readonly object ServerLock = new object();
+        private static SnapshotServer _sharedServer;
+        private static volatile AIRaceEnginePlugin _live;
+        private static volatile Msg _serverError;
+        private static System.Threading.Timer _serverStop;
+
+        private static string RouteToLive(string path, Dictionary<string, string> query, string auth)
+        {
+            var live = _live;
+            if (live != null) return live.Route(path, query, auth);
+            return path == "/snapshot" ? JsonConvert.SerializeObject(OfflineSnapshot, Formatting.None) : null;
+        }
+
+        /// <summary>Ouvre le port s'il ne l'est pas déjà. En cas d'échec, le chien de garde réessaie toutes les 5 s.</summary>
+        private static void EnsureServer()
+        {
+            lock (ServerLock)
+            {
+                if (_sharedServer != null) return;
+                var server = new SnapshotServer(Port, RouteToLive);
+                try
+                {
+                    if (_token == null) CreateToken();
+                    server.Start();
+                    _sharedServer = server;
+                    _serverError = null;
+                    SimHub.Logging.Current.Info($"[AI Race Engineer] Télémétrie disponible sur http://127.0.0.1:{Port}/snapshot");
+                }
+                catch (Exception ex)
+                {
+                    server.Stop();
+                    var error = new Msg($"Impossible d'ouvrir le port {Port} : {ex.Message}", $"Cannot open port {Port}: {ex.Message}");
+                    // Une seule ligne au journal, pas une toutes les 5 s tant que le port reste pris
+                    if (_serverError?.FrText != error.FrText) SimHub.Logging.Current.Error("[AI Race Engineer] " + error.FrText);
+                    _serverError = error;
+                }
+            }
+        }
+
+        /// <summary>Vraie fermeture de SimHub : on libère le port tout de suite.</summary>
+        private static void StopServer()
+        {
+            lock (ServerLock)
+            {
+                CancelServerStop();
+                _sharedServer?.Stop();
+                _sharedServer = null;
+                _live = null;
+            }
+        }
+
+        /// <summary>Plus aucune instance (plugin désactivé, ou entre deux jeux) : le port est refermé au bout de 10 s.</summary>
+        private static void StopServerLater()
+        {
+            lock (ServerLock)
+            {
+                CancelServerStop();
+                System.Threading.Timer timer = null;
+                timer = new System.Threading.Timer(_ =>
+                {
+                    lock (ServerLock)
+                    {
+                        if (_serverStop != timer) return; // annulé par une nouvelle instance
+                        _serverStop = null;
+                        _sharedServer?.Stop();
+                        _sharedServer = null;
+                        _live = null;
+                    }
+                    timer.Dispose();
+                }, null, System.Threading.Timeout.Infinite, System.Threading.Timeout.Infinite);
+                _serverStop = timer;
+                timer.Change(10000, System.Threading.Timeout.Infinite);
+            }
+        }
+
+        /// <summary>À appeler en tenant ServerLock.</summary>
+        private static void CancelServerStop()
+        {
+            _serverStop?.Dispose();
+            _serverStop = null;
         }
 
         private bool Authorized(string authHeader)

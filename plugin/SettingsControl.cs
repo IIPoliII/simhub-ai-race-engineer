@@ -1049,14 +1049,15 @@ namespace AIRaceEngineer
                 T("L'ingé règle la voiture quand tu lui demandes : « mets le frein à 56 », « ABS 3 », « un cran de TC en moins ».",
                   "The engineer adjusts the car when you ask: \"brake bias 56\", \"ABS 3\", \"one click less TC\"."));
             body.Children.Add(ToggleRow(T("Régler la voiture dans le jeu", "Adjust the car in the game"),
-                T("Appuie pour toi sur les touches du jeu ci-dessous, jusqu'à la valeur demandée. Le jeu doit être au premier plan.",
-                  "Presses the game keys below for you, until the value asked for. The game must be in front."),
+                T("Appuie pour toi sur les mêmes rôles que tes boutons dans le Control Mapper de SimHub, jusqu'à la valeur demandée. Marche dans tous les jeux reliés au Control Mapper.",
+                  "Presses the same roles as your buttons in SimHub's Control Mapper for you, until the value asked for. Works in every game linked to the Control Mapper."),
                 S.GameControl, v => { S.GameControl = v; Changed(); }));
+            body.Children.Add(RadioLine(MapperSummary()));
             body.Children.Add(Divider());
             body.Children.Add(new TextBlock
             {
-                Text = T("Associe d'abord ces actions à des touches du clavier dans le jeu (en plus des boutons du volant), puis clique dans un champ et appuie sur la même touche. Retour arrière efface.",
-                         "First bind these actions to keyboard keys in the game (on top of your wheel buttons), then click a field and press the same key. Backspace clears it."),
+                Text = T("Sans Control Mapper : associe ces actions à des touches du clavier dans le jeu, puis clique dans un champ et appuie sur la même touche (le jeu doit alors être au premier plan). Des touches enregistrées ici passent avant le Control Mapper. Retour arrière efface.",
+                         "Without the Control Mapper: bind these actions to keyboard keys in the game, then click a field and press the same key (the game must then be in front). Keys saved here take priority over the Control Mapper. Backspace clears it."),
                 FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 8),
             });
             body.Children.Add(Field(T("Frein vers l'avant", "Brake bias forward"), KeyBox(S.KeyBrakeBiasFront, v => S.KeyBrakeBiasFront = v)));
@@ -1072,6 +1073,20 @@ namespace AIRaceEngineer
                 FontSize = 12, Foreground = Theme.B("Muted"), TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0),
             });
             return card;
+        }
+
+        /// <summary>Rôles du Control Mapper trouvés pour le frein, l'ABS et le TC (ou ce qui manque).</summary>
+        private string MapperSummary()
+        {
+            var found = _plugin.MapperRoles();
+            if (found.Count == 0)
+                return T("Control Mapper : aucun rôle Brake Bias, ABS ou TractionControl trouvé. Utilise les touches clavier ci-dessous.",
+                         "Control Mapper: no Brake Bias, ABS or TractionControl role found. Use the keyboard keys below.");
+            var names = new System.Collections.Generic.Dictionary<string, string> { ["bb"] = T("frein", "brake bias"), ["abs"] = "ABS", ["tc"] = "TC" };
+            var parts = found.Select(f => $"{names[f.Key]} ({f.Value})");
+            var missing = names.Keys.Where(k => !found.ContainsKey(k)).Select(k => names[k]).ToList();
+            return T("Control Mapper : ", "Control Mapper: ") + string.Join(", ", parts) +
+                   (missing.Count > 0 ? T(". Pas de rôle pour : ", ". No role for: ") + string.Join(", ", missing) : "") + ".";
         }
 
         /// <summary>Champ qui retient la touche appuyée (avec Ctrl, Shift, Alt), au lieu d'un nom à taper.</summary>

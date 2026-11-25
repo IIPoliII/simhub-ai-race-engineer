@@ -94,6 +94,7 @@ namespace AIRaceEngineer
         }
         private static volatile LiveCar _live;
         private static readonly object _controlLock = new object();   // une commande à la fois
+        private static volatile PluginManager _pluginManager;
 
         // Télémétrie
         private DateTime _lastSnapshot = DateTime.MinValue;
@@ -126,6 +127,7 @@ namespace AIRaceEngineer
         public void Init(PluginManager pluginManager)
         {
             System.Threading.Interlocked.Increment(ref _instances);
+            _pluginManager = pluginManager;   // pour le Control Mapper (réglages à la voix)
             CancelClientStop(); // la nouvelle instance reprend le client vocal laissé par la précédente
             Settings = EngineerSettings.Load();
             L10n.Language = Settings.Language;
@@ -503,6 +505,16 @@ namespace AIRaceEngineer
             catch (Exception) { return null; }
         }
 
+        /// <summary>Rôles du Control Mapper trouvés par réglage (bb, abs, tc) : « ABS+ / ABS- », pour la page.</summary>
+        public Dictionary<string, string> MapperRoles()
+        {
+            var found = new Dictionary<string, string>();
+            foreach (var kind in new[] { "bb", "abs", "tc" })
+                if (GameControls.MapperRoles(_pluginManager, kind) is (string up, string down))
+                    found[kind] = up.Trim() + " / " + down.Trim();
+            return found;
+        }
+
         private static double? Dbl(Dictionary<string, string> q, string key) =>
             q.TryGetValue(key, out var v) && double.TryParse(v, System.Globalization.NumberStyles.Float,
                 System.Globalization.CultureInfo.InvariantCulture, out var d) ? d : (double?)null;
@@ -533,19 +545,38 @@ namespace AIRaceEngineer
                 case "tc": pick = l => l.Tc; upKey = s.KeyTcUp; downKey = s.KeyTcDown; tolerance = 0.01; break;
                 default: return null;
             }
-            var up = GameControls.Binding.Parse(upKey);
-            var down = GameControls.Binding.Parse(downKey);
-            if (up == null || down == null)
-                return JsonConvert.SerializeObject(new { result = "no_keys", game = live.Game, value = pick(live) });
+            // Touches clavier enregistrées dans la page : choix explicite du pilote. Sinon les rôles du Control Mapper
+            // (ABS+, TractionControl-...), déjà reliés aux boutons de chaque jeu : rien à associer en plus.
+            var upKeys = GameControls.Binding.Parse(upKey);
+            var downKeys = GameControls.Binding.Parse(downKey);
+            Action up, down;
+            string via;
+            bool needsFocus;
+            var pm = _pluginManager;
+            if (upKeys != null && downKeys != null)
+            {
+                up = () => GameControls.Press(upKeys);
+                down = () => GameControls.Press(downKeys);
+                via = "keys";
+                needsFocus = true;
+            }
+            else if (GameControls.MapperRoles(pm, kind) is (string upRole, string downRole))
+            {
+                up = () => GameControls.PressRole(pm, upRole);
+                down = () => GameControls.PressRole(pm, downRole);
+                via = "mapper:" + upRole.Trim() + " / " + downRole.Trim();
+                needsFocus = false;
+            }
+            else return JsonConvert.SerializeObject(new { result = "no_keys", game = live.Game, value = pick(live) });
 
             var target = Dbl(q, "v");
             int steps = Int(q, "s", 0);
             if (target == null && steps == 0) return null;
             GameControls.Result r;
             lock (_controlLock)
-                r = GameControls.Adjust(() => _live is LiveCar l ? pick(l) : null, up, down, target, steps, tolerance);
-            SimHub.Logging.Current.Info($"[AI Race Engineer] réglage {kind} : {r.before} -> {r.value} ({r.result})");
-            return JsonConvert.SerializeObject(new { r.result, r.value, r.before, game = live.Game });
+                r = GameControls.Adjust(() => _live is LiveCar l ? pick(l) : null, up, down, target, steps, tolerance, needsFocus);
+            SimHub.Logging.Current.Info($"[AI Race Engineer] réglage {kind} par {via} : {r.before} -> {r.value} ({r.result})");
+            return JsonConvert.SerializeObject(new { r.result, r.value, r.before, game = live.Game, via });
         }
 
         /// <summary>

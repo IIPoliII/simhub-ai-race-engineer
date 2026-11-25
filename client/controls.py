@@ -156,12 +156,15 @@ def spoken(cmd: dict, reply: dict | None, language: str) -> str:
         return ("Les réglages à la voix sont coupés. Active-les dans la page du plugin dans SimHub." if fr
                 else "Voice adjustments are off. Turn them on in the plugin page in SimHub.")
     if result == "no_keys":
-        return (f"Il me manque les touches du jeu pour le réglage {name}. Associe-les dans la page du plugin." if fr
-                else f"I don't have the game keys for {name}. Set them in the plugin page.")
+        return (f"Je n'ai pas de rôle Control Mapper ni de touche pour le réglage {name}. Regarde la page du plugin." if fr
+                else f"I have no Control Mapper role or key for {name}. Check the plugin page.")
     if result == "no_value":
         return (f"Le jeu ne me donne pas la valeur {name}, je ne peux pas le régler." if fr
                 else f"The game doesn't give me the {name} value, I can't adjust it.")
     if result == "no_effect":
+        if str((reply or {}).get("via", "")).startswith("mapper"):
+            return (f"J'ai appuyé mais {name} ne bouge pas. Vérifie que le rôle est relié à ce jeu dans le Control Mapper." if fr
+                    else f"I pressed but {name} doesn't move. Check the role is linked to this game in the Control Mapper.")
         return (f"J'ai appuyé mais {name} ne bouge pas. Vérifie les touches dans le jeu et dans SimHub." if fr
                 else f"I pressed the keys but {name} doesn't move. Check the keys in the game and in SimHub.")
     if result == "not_focused":

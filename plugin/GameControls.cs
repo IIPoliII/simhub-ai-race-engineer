@@ -1,8 +1,13 @@
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
+using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Threading;
+using System.Text.RegularExpressions;
 using System.Windows.Input;
+using SimHub.Plugins;
 
 namespace AIRaceEngineer
 {
@@ -10,9 +15,10 @@ namespace AIRaceEngineer
     /// Réglages faits dans le jeu à la voix. SimHub ne fait que lire la télémétrie : pour écrire, il n'y a que
     /// deux chemins, qui dépendent du jeu.
     /// - iRacing : son SDK accepte des commandes du menu des stands (essence, pneus, réparation rapide).
-    /// - Les autres réglages du cockpit (répartition de freinage, ABS, TC) : on appuie sur les touches que le pilote
-    ///   a associées dans le jeu, en relisant la valeur dans la télémétrie après chaque appui jusqu'à la cible.
-    ///   Ça marche dans tous les jeux qui ont ces touches et renvoient la valeur (ACC, iRacing, LMU, rFactor 2, AMS2...).
+    /// - Les autres réglages du cockpit (répartition de freinage, ABS, TC) : on « appuie » sur le rôle du Control Mapper
+    ///   de SimHub (ABS+, TractionControl-, Brake Bias +...) que le pilote utilise déjà pour ses boutons, sinon sur les
+    ///   touches clavier associées dans le jeu. Après chaque appui, on relit la valeur dans la télémétrie jusqu'à la
+    ///   cible. Ça marche dans tous les jeux qui renvoient la valeur (AMS2, ACC, iRacing, LMU, rFactor 2...).
     /// </summary>
     internal static class GameControls
     {
@@ -181,11 +187,14 @@ namespace AIRaceEngineer
         /// dans la télémétrie. Si « plus » fait baisser la valeur (certains jeux comptent la répartition vers l'arrière),
         /// les deux touches sont échangées une fois.
         /// </summary>
-        public static Result Adjust(Func<double?> read, Binding up, Binding down, double? target, int steps, double tolerance)
+        public static Result Adjust(Func<double?> read, Action up, Action down, double? target, int steps, double tolerance,
+                                    bool needsFocus)
         {
             var before = read();
             if (before == null) return new Result { result = "no_value" };
-            if (!GameInFront()) return new Result { result = "not_focused", value = before, before = before };
+            // Touches clavier : elles partent vers la fenêtre au premier plan. Le Control Mapper, lui, passe par la
+            // manette virtuelle, que le jeu lit même quand il n'est pas devant.
+            if (needsFocus && !GameInFront()) return new Result { result = "not_focused", value = before, before = before };
 
             double v = before.Value;
             int dir = target is double t0 ? Math.Sign(t0 - v) : Math.Sign(steps);
@@ -198,7 +207,7 @@ namespace AIRaceEngineer
             int changes = 0, stalls = 0;
             for (int i = 0; i < 80; i++)
             {
-                Press(dir > 0 ? increase : decrease);
+                (dir > 0 ? increase : decrease)();
                 var nv = WaitForChange(read, v, 400);
                 if (nv == null || Math.Abs(nv.Value - v) < 1e-6)
                 {
@@ -228,6 +237,56 @@ namespace AIRaceEngineer
             }
             return new Result { result = "done", value = v, before = before };
         }
+
+        // ---------- Control Mapper de SimHub ----------
+
+        /// <summary>
+        /// Rôles du Control Mapper pour un réglage (bb, abs, tc) : (plus, moins), ou null s'il n'y en a pas.
+        /// Les noms viennent de la liste de SimHub (« ABS+ », « TractionControl- », « Engine Braking / Brake Bias + »).
+        /// </summary>
+        public static (string Up, string Down)? MapperRoles(PluginManager pm, string kind)
+        {
+            var roles = AvailableRoles(pm);
+            if (roles == null) return null;
+            Regex pattern;
+            switch (kind)
+            {
+                case "bb": pattern = new Regex(@"brake\s*bias\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
+                case "abs": pattern = new Regex(@"^\s*abs\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
+                case "tc": pattern = new Regex(@"^\s*(?:traction\s*control|tc)\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
+                default: return null;
+            }
+            string up = null, down = null;
+            foreach (var role in roles)
+            {
+                var m = pattern.Match(role ?? "");
+                if (!m.Success) continue;
+                if (m.Groups[1].Value == "+") up = up ?? role;
+                else down = down ?? role;
+            }
+            return up != null && down != null ? (up, down) : ((string, string)?)null;
+        }
+
+        /// <summary>Rôles de bouton du Control Mapper, ou null (SimHub trop ancien, Control Mapper absent).</summary>
+        public static List<string> AvailableRoles(PluginManager pm)
+        {
+            if (pm == null) return null;
+            try { return ReadRoles(pm); }
+            catch (Exception) { return null; }   // MissingMethodException sur un SimHub sans cette API, etc.
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static List<string> ReadRoles(PluginManager pm) => pm.GetControlMapperInterface()?.GetAvailableButtonRoles()?.ToList();
+
+        /// <summary>Appui bref sur un rôle du Control Mapper, comme le bouton du volant qui y est associé.</summary>
+        public static void PressRole(PluginManager pm, string role)
+        {
+            try { StartStopRole(pm, role, 100); }
+            catch (Exception ex) { SimHub.Logging.Current.Warn("[AI Race Engineer] Control Mapper : " + ex.Message); }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void StartStopRole(PluginManager pm, string role, int ms) => pm.GetControlMapperInterface()?.StartStopRole(role, ms);
 
         private static double? WaitForChange(Func<double?> read, double from, int timeoutMs)
         {

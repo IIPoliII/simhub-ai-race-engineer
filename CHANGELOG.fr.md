@@ -5,6 +5,14 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [Non publié]
+
+### Corrigé
+- Ingé muet après un changement de jeu dans SimHub : le client vocal recevait une copie du socket du port 8889, donc
+  quand SimHub recréait le plugin, le port restait pris sans que personne ne réponde (« Une seule utilisation de
+  chaque adresse de socket » dans le journal) jusqu'au redémarrage de SimHub. Le port passe maintenant d'une instance
+  du plugin à la suivante sans être refermé, et il est réessayé toutes les 5 secondes s'il est pris.
+
 ## [0.6.2] - 2026-11-25
 
 ### Corrigé

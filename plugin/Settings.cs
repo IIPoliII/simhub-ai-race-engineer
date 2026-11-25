@@ -226,6 +226,7 @@ namespace AIRaceEngineer
         public bool CallFuel { get; set; } = true;
         public bool CallInvalidLap { get; set; } = true;   // « Tour invalidé. » au moment où le jeu l'invalide
         public bool CallSplits { get; set; } = true;       // écart au meilleur tour à chaque secteur, hors course
+        public bool CallDamage { get; set; } = true;       // dégâts, crevaison, roue perdue
         public int FuelWarningLaps { get; set; } = 3;
 
         // Réglages dans le jeu à la voix : coupé tant que le pilote ne l'a pas activé (des touches sont envoyées au jeu)

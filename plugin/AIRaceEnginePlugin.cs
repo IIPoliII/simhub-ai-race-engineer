@@ -763,7 +763,8 @@ namespace AIRaceEngineer
             try
             {
                 var n = Neighbours.From(d);
-                _callouts.Update(d, n.MyPos, n.Ahead, n.Behind);
+                var damage = DamageState.Read(d);
+                _callouts.Update(d, n.MyPos, n.Ahead, n.Behind, damage);
                 _snapshot = Build(data, d, n);
                 GameName = data.GameName;
                 GameDetail = string.Join(" · ", new[] { d.TrackName, d.SessionTypeName, n.MyPos > 0 ? "P" + n.MyPos : null }
@@ -849,6 +850,7 @@ namespace AIRaceEngineer
         internal sealed class Neighbours
         {
             public bool MultiClass;
+            public bool Solo;   // hotlap, time trial… : seul en piste, les autres voitures sont des fantômes
             public int MyPos;
             public Opponent Me, Ahead, Behind;
 
@@ -859,11 +861,15 @@ namespace AIRaceEngineer
                 int Pos(Opponent o) => multiClass ? o.PositionInClass : o.Position;
 
                 var me = field.FirstOrDefault(o => o.IsPlayer);
-                int myPos = me != null ? Pos(me) : (multiClass ? d.PlayerClassPosition : d.Position);
+                // En hotlap, le jeu range le fantôme comme une voiture : l'ingé donnait l'écart avec « le pilote derrière ».
+                // Ni place, ni voisins : il n'y a personne contre qui rouler
+                bool solo = Callouts.IsSolo(d.SessionTypeName);
+                int myPos = solo ? 0 : me != null ? Pos(me) : (multiClass ? d.PlayerClassPosition : d.Position);
                 bool placed = myPos > 0; // 0 ou -1 : pas encore classé, sinon le leader passerait pour la voiture derrière
                 return new Neighbours
                 {
                     MultiClass = multiClass,
+                    Solo = solo,
                     MyPos = myPos,
                     Me = me,
                     Ahead = placed ? field.FirstOrDefault(o => !o.IsPlayer && Pos(o) == myPos - 1) : null,
@@ -886,7 +892,7 @@ namespace AIRaceEngineer
             bool noTemp = NoTemperature(d);
             // Hors course, le classement se fait au meilleur tour : sans tour bouclé, la place donnée par le jeu
             // (souvent 1, seul en piste) ne veut rien dire et l'ingé disait « t'es en tête »
-            bool ranked = Callouts.IsRace(d.SessionTypeName) || d.BestLapTime > TimeSpan.Zero;
+            bool ranked = !n.Solo && (Callouts.IsRace(d.SessionTypeName) || d.BestLapTime > TimeSpan.Zero);
             // Valeurs « absentes » de SimHub (-1, 0) envoyées comme null : l'ingénieur dit qu'il ne sait pas
             return new
             {
@@ -910,8 +916,8 @@ namespace AIRaceEngineer
                 me = new
                 {
                     position = ranked && n.MyPos > 0 ? n.MyPos : (int?)null,
-                    overall_position = n.MultiClass && n.Me != null && n.Me.Position > 0 ? n.Me.Position : (int?)null,
-                    field_size = n.MultiClass ? d.PlayerClassOpponentsCount : d.OpponentsCount,
+                    overall_position = !n.Solo && n.MultiClass &&n.Me != null && n.Me.Position > 0 ? n.Me.Position : (int?)null,
+                    field_size = n.Solo ? (int?)null : n.MultiClass ? d.PlayerClassOpponentsCount : d.OpponentsCount,
                     lap = d.CurrentLap,
                     // Au stand, le chrono tourne quand même : l'ingé le donnait comme un temps au tour
                     current_lap_time = d.IsInPitLane == 1 ? null : T(d.CurrentLapTime),

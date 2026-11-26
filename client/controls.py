@@ -162,6 +162,11 @@ def spoken(cmd: dict, reply: dict | None, language: str) -> str:
         return (f"Le jeu ne me donne pas la valeur {name}, je ne peux pas le régler." if fr
                 else f"The game doesn't give me the {name} value, I can't adjust it.")
     if result == "no_effect":
+        # ABS ou TC à zéro qui ne bouge pas : la voiture n'en a pas (formules, voitures anciennes), pas une panne de bouton
+        if cmd["kind"] in ("abs", "tc") and value is not None and abs(value) < 0.01:
+            de = "d'" if name[0] in "AEIOU" else "de "   # « pas d'ABS », « pas de TC »
+            return (f"Pas {de}{name} sur cette voiture, il reste à zéro." if fr
+                    else f"No {name} on this car, it stays at zero.")
         if str((reply or {}).get("via", "")).startswith("mapper"):
             return (f"J'ai appuyé mais {name} ne bouge pas. Vérifie que le rôle est relié à ce jeu dans le Control Mapper." if fr
                     else f"I pressed but {name} doesn't move. Check the role is linked to this game in the Control Mapper.")

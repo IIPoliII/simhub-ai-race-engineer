@@ -1091,8 +1091,8 @@ namespace AIRaceEngineer
         {
             var found = _plugin.MapperRoles();
             if (found.Count == 0)
-                return T("Control Mapper : aucun rôle Brake Bias, ABS ou TractionControl trouvé. Utilise les touches clavier ci-dessous.",
-                         "Control Mapper: no Brake Bias, ABS or TractionControl role found. Use the keyboard keys below.");
+                return T("Control Mapper : aucun rôle BrakeBalance, ABS ou TractionControl trouvé. Utilise les touches clavier ci-dessous.",
+                         "Control Mapper: no BrakeBalance, ABS or TractionControl role found. Use the keyboard keys below.");
             var names = new System.Collections.Generic.Dictionary<string, string> { ["bb"] = T("frein", "brake bias"), ["abs"] = "ABS", ["tc"] = "TC" };
             var parts = found.Select(f => $"{names[f.Key]} ({f.Value})");
             var missing = names.Keys.Where(k => !found.ContainsKey(k)).Select(k => names[k]).ToList();

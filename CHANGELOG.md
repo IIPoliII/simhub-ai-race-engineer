@@ -5,6 +5,17 @@
 All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.7.1] - 2026-11-26
+
+### Fixed
+- Voice adjustments: brake bias now goes through the Control Mapper's BrakeBalanceFront / BrakeBalanceRear roles,
+  the ones SimHub actually offers. The engineer no longer asks you to "check the plugin page" when the buttons are
+  already mapped.
+- ABS or TC asked on a car that has none: the engineer says "No ABS on this car" instead of talking about a setting
+  at zero or a badly linked button.
+- "How's the rear wing": the engineer answers with aero damage when it has it, or says it doesn't know. It no longer
+  answers with some other value instead (a tyre pressure).
+
 ## [0.7.0] - 2026-11-25
 
 ### Added

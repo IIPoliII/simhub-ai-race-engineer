@@ -5,6 +5,17 @@
 Tous les changements notables du projet sont notés ici. Le format suit
 [Keep a Changelog](https://keepachangelog.com/fr/1.1.0/) et les versions suivent le [versionnage sémantique](https://semver.org/lang/fr/).
 
+## [0.7.1] - 2026-11-26
+
+### Corrigé
+- Réglages à la voix : la répartition de freinage passe maintenant par les rôles BrakeBalanceFront / BrakeBalanceRear
+  du Control Mapper, ceux que SimHub propose vraiment. L'ingé ne demande plus de « regarder la page du plugin » alors
+  que les boutons sont déjà associés.
+- ABS ou TC demandé sur une voiture qui n'en a pas : l'ingé dit « Pas d'ABS sur cette voiture » au lieu de parler
+  d'un réglage à zéro ou d'un bouton mal relié.
+- « État de l'aileron arrière » : l'ingé répond avec les dégâts aéro s'il les a, ou dit qu'il n'a pas l'info. Il ne
+  répond plus avec une autre valeur à la place (une pression de pneu).
+
 ## [0.7.0] - 2026-11-25
 
 ### Ajouté

@@ -16,7 +16,7 @@ namespace AIRaceEngineer
     /// deux chemins, qui dépendent du jeu.
     /// - iRacing : son SDK accepte des commandes du menu des stands (essence, pneus, réparation rapide).
     /// - Les autres réglages du cockpit (répartition de freinage, ABS, TC) : on « appuie » sur le rôle du Control Mapper
-    ///   de SimHub (ABS+, TractionControl-, Brake Bias +...) que le pilote utilise déjà pour ses boutons, sinon sur les
+    ///   de SimHub (ABS+, TractionControl-, BrakeBalanceFront...) que le pilote utilise déjà pour ses boutons, sinon sur les
     ///   touches clavier associées dans le jeu. Après chaque appui, on relit la valeur dans la télémétrie jusqu'à la
     ///   cible. Ça marche dans tous les jeux qui renvoient la valeur (AMS2, ACC, iRacing, LMU, rFactor 2...).
     /// </summary>
@@ -242,7 +242,7 @@ namespace AIRaceEngineer
 
         /// <summary>
         /// Rôles du Control Mapper pour un réglage (bb, abs, tc) : (plus, moins), ou null s'il n'y en a pas.
-        /// Les noms viennent de la liste de SimHub (« ABS+ », « TractionControl- », « Engine Braking / Brake Bias + »).
+        /// Les noms viennent de la liste de SimHub (« ABS+ », « TractionControl- », « BrakeBalanceFront »).
         /// </summary>
         public static (string Up, string Down)? MapperRoles(PluginManager pm, string kind)
         {
@@ -251,7 +251,9 @@ namespace AIRaceEngineer
             Regex pattern;
             switch (kind)
             {
-                case "bb": pattern = new Regex(@"brake\s*bias\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
+                // SimHub : BrakeBalanceFront / BrakeBalanceRear (la répartition est le % à l'avant : « Front » la monte ;
+                // si le jeu compte dans l'autre sens, Adjust échange les deux)
+                case "bb": pattern = new Regex(@"^\s*brake\s*balance\s*(front|rear)\s*$|brake\s*bias\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
                 case "abs": pattern = new Regex(@"^\s*abs\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
                 case "tc": pattern = new Regex(@"^\s*(?:traction\s*control|tc)\s*([+-])\s*$", RegexOptions.IgnoreCase); break;
                 default: return null;
@@ -261,7 +263,8 @@ namespace AIRaceEngineer
             {
                 var m = pattern.Match(role ?? "");
                 if (!m.Success) continue;
-                if (m.Groups[1].Value == "+") up = up ?? role;
+                var sign = m.Groups.Cast<Group>().Skip(1).Select(g => g.Value).FirstOrDefault(v => v.Length > 0)?.ToLowerInvariant();
+                if (sign == "+" || sign == "front") up = up ?? role;
                 else down = down ?? role;
             }
             return up != null && down != null ? (up, down) : ((string, string)?)null;
